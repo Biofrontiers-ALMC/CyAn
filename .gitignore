@@ -1,0 +1,8 @@
+#Ignore everything except for m-files and md (markdown)
+*.*
+!.gitignore
+!*.m
+!*.md
+
+#Allow everything in the build directory
+!build/*.*
