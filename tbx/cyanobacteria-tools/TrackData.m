@@ -226,6 +226,15 @@ classdef TrackData
                 %work
                 dataInd = frameIndex;
                 
+            elseif ischar(frameIndex)
+                
+                if any(strcmpi(frameIndex,{'last','end'}))
+                    dataInd = numel(obj.Data);
+                else
+                    error('TrackData:deleteFrame:frameIndexCharInvalid',...
+                        'Expected the frame index to be a number, a logical array, or ''last''.');
+                end
+                
             else
                 error('TrackData:deleteFrame:frameIndexNotNumericOrLogical',...
                     'Expected the frame index to be a number or a logical array.');
@@ -240,6 +249,12 @@ classdef TrackData
             end
             
         end
+        
+%         function endInd = end(obj)
+%             
+%             endInd = numel(obj.Data);
+%             
+%         end
         
 %         function varargout = subsref(obj, s)
 %             %SUBSREF  Subscripted reference

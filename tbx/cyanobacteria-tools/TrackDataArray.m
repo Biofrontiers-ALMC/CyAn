@@ -71,6 +71,24 @@ classdef TrackDataArray
             
         end
         
+        function obj = deleteFrame(obj, trackIndex, frameIndex)
+            
+            obj.Tracks(trackIndex) = obj.Tracks(trackIndex).deleteFrame(frameIndex);
+            
+        end
+        
+        function obj = updateMotherTrackIdx(obj, trackIndex, motherTrackIdx)
+            
+            obj.Tracks(trackIndex).MotherTrackIdx = motherTrackIdx;
+            
+        end
+        
+        function obj = updateDaughterTrackIdxs(obj, trackIndex, daughterTrackIdxs)
+            
+            obj.Tracks(trackIndex).DaughterTrackIdxs = daughterTrackIdxs;
+            
+        end
+        
         function numTracks = numel(obj)
             %NUMEL  Count number of TrackData objects in the array 
             

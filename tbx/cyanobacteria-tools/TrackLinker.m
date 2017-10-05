@@ -76,24 +76,26 @@ classdef TrackLinker
                     
                     case true
                         %Check if there is data in the 'Unmatched' field
-                        
                         if ~isempty(ip.Unmatched)
                             
-                            %TODO
-                            
-                            
+                            %Convert the unmatched data to a structure
+                            dataFields = fieldnames(ip.Unmatched);
+                            for iFields = 1:numel(dataFields)
+                                for iElem = 1:size(ip.Unmatched.(dataFields{iFields}),1)
+                                    frameData(iElem).(dataFields{iFields}) = ip.Unmatched.(dataFields{iFields})(iElem);
+                                end                                
+                            end
                         end
                         
                     case false
-                        
                         %Input is a struct. Create a new Track for each
                         %entry.
-                        obj = obj.CreateNewTrack(ip.Results.frameIndex,...
-                            ip.Results.frameData);
+                        frameData = ip.Results.frameData;
                         
                 end
                 
-                
+                obj = obj.CreateNewTrack(ip.Results.frameIndex,...
+                    frameData);
                 
             end
             
@@ -115,14 +117,115 @@ classdef TrackLinker
             assignments = TrackLinker.lapjv(costMatrix);
             
             %Handle the assignments
-            for iM = 1:numel(obj.activeTracks)
-                if assignments(iM) > 0 && assignments(iM) <= numel(newData)
-                    %Update the track
+            nTracks = numel(obj.activeTracks);
+            nNewData = numel(newData);
+            
+            for iM = 1:nTracks
+                if assignments(iM) > 0 && assignments(iM) <= nNewData
+                    %If an existing track was assigned to a new detection,
+                    %then update its current position
                     obj.TrackArray = obj.TrackArray.updateTrack(iM, frameIndex, newData(assignments(iM)));
+                    obj.activeTracks(iM).Age = 0;
+                else
+                    
+                    obj.activeTracks(iM).Age = obj.activeTracks(iM).Age + 1;
+                    
                 end
             end
             
-            
+            %Second set of assignments are 'start segments'
+            for iN = 1:nNewData
+                
+                newAssignment = assignments(nTracks + iN);
+                
+                if  newAssignment > 0 && newAssignment <= nNewData
+                    
+                    %Test for cell division
+                    if obj.TrackMitosis
+                        
+                        %Calculate the mitosis score. The score is
+                        %calculated using the current new detection, and
+                        %looking for an existing track that has a cell
+                        %nearby
+                        mitosisScore = zeros(1, numel(obj.activeTracks));
+                        for iCol = 1:numel(obj.activeTracks)
+                            if obj.activeTracks(iCol).Age > 0
+                                %If the track was not updates this frame, then it
+                                %is not a valid mitosis event
+                                mitosisScore(iCol) = Inf;
+                            else
+                                %Get the current active track
+                                currTrack = obj.getTrack(obj.activeTracks(iCol).trackIdx);
+                                
+                                %If the track had a recent division, then it is not
+                                %a valid mitosis event
+                                if ~isnan(currTrack.MotherTrackIdx) && (frameIndex - currTrack.StartFrame) < obj.MinAgeSinceMitosis
+                                    mitosisScore([obj.activeTracks.AgeSinceDivision] ) = Inf;
+                                else
+                                    mitosisScore(iCol) = TrackLinker.computeScore(...
+                                        newData(iN).(obj.MitosisParameter),...
+                                        currTrack.Data(end - 1).(obj.MitosisParameter),...
+                                        obj.MitosisCalculation);
+                                end
+                            end
+                        end
+                        
+                        %Look for a valid mitosis event
+                        validEvents = mitosisScore > obj.MitosisScoreRange(1) & mitosisScore < obj.MitosisScoreRange(2);
+
+                        if ~any(validEvents)
+                            isMitosis = false;
+                        else
+                            %Look for the lowest score - this indicates the
+                            %closest match (distance or overlap)
+                            closestMatch = find(mitosisScore == min(mitosisScore(validEvents)));
+                            
+                            %If it is a mitosis event:
+                            %  (1) Create two new daughter tracks
+                            %  (2) Update the MotherTrackIdx in the daughter tracks
+                            %  (3)
+                            %  (2) Remove the last entry in the mother track
+                            %  (3) Stop tracking the mother track (remove from
+                            %     activeTracks)
+                            %  (4) Update MotherTrackIdx and daughterIdx for the
+                            %  tracks
+                            
+                            %Get the mother track index
+                            motherTrackIdx = obj.activeTracks(closestMatch).trackIdx;
+                            motherTrack = obj.getTrack(obj.activeTracks(closestMatch).trackIdx);
+                            
+                            %Create a new daughter track using data from
+                            %the end of the mother track
+                            [obj, daughter1Idx] = obj.CreateNewTrack(frameIndex, motherTrack.Data(end));
+                            obj.TrackArray = obj.TrackArray.updateMotherTrackIdx(daughter1Idx,motherTrackIdx);
+                            
+                            %Create a second daughter track with the new
+                            %data
+                            [obj, daughter2Idx] = obj.CreateNewTrack(frameIndex,newData(newAssignment));
+                            obj.TrackArray = obj.TrackArray.updateMotherTrackIdx(daughter2Idx,motherTrackIdx);
+                            
+                            %Remove the last frame of the mother track
+                            obj.TrackArray = obj.TrackArray.deleteFrame(motherTrackIdx,'last');
+                            
+                            %Update daughterIdx in mother track
+                            obj.TrackArray = obj.TrackArray.updateDaughterTrackIdxs(motherTrackIdx,[daughter1Idx,daughter2Idx]);
+                            
+                            %Remove mother track from activeTracks
+                            obj.activeTracks(closestMatch) = [];
+                            
+                            isMitosis = true;
+                        end
+                        
+                    else
+                        isMitosis = false;
+                    end
+                    
+                    if ~isMitosis
+                        %Create a new track
+                        obj = obj.CreateNewTrack(frameIndex,newData(newAssignment));
+                    end
+                end
+            end
             
         end
         
@@ -139,7 +242,7 @@ classdef TrackLinker
     
     methods (Hidden)
         
-        function obj = CreateNewTrack(obj, frameIndex, newTrackData)
+        function [obj, newTrackId] = CreateNewTrack(obj, frameIndex, newTrackData)
             %CREATENEWTRACK  Creates a new track
             %
             %  L = L.CREATENEWTRACK(I, D) will create a new track, with a
@@ -193,23 +296,21 @@ classdef TrackLinker
                     obj.LinkedBy);
             end
             
-            %Assemble the linking data for the active tracks
-            activeTrackData = cell(numel(obj.activeTracks),1);  %Has to be cell in case of different data sizes
-            for iActiveTrack = 1:numel(obj.activeTracks)
-                currTrack = obj.TrackArray.getTrack(obj.activeTracks(iActiveTrack).trackIdx);
-                activeTrackData{iActiveTrack} = currTrack.Data.(obj.LinkedBy)(end);
-            end
-            
-            %tIDY THIS UP
-            
-            newTrackDataLinkingParameter = cat(1,newTrackData.(obj.LinkedBy));
-            
             %Calculate linking costs
             costToLink = zeros(numel(obj.activeTracks), numel(newTrackData));
             
-            for iExisting = 1:numel(obj.activeTracks)
-                costToLink(:,iExisting) = (TrackLinker.computeScore(activeTrackData(iExisting,:),...
-                    newTrackDataLinkingParameter,obj.LinkCalculation))';
+            for iRow = 1:numel(obj.activeTracks)
+                
+                currTrack = obj.getTrack(obj.activeTracks(iRow).trackIdx);
+                                
+                for iCol = 1:numel(newTrackData)
+                    
+                    costToLink(iRow, iCol) = TrackLinker.computeScore(...
+                        currTrack.Data(end).(obj.LinkedBy), ...
+                        newTrackData(iCol).(obj.LinkedBy), ...
+                        obj.LinkCalculation);
+                    
+                end
             end
             
             %Assign linking costs which are too high or too low to the
@@ -250,24 +351,11 @@ classdef TrackLinker
             switch lower(type)
                 
                 case 'euclidean'
-                    %Make both inputs column vectors if they are not
-                    %already
-                    if iscell(input1)
-                        
-                        input1 = cell2mat(input1);
-                        
-                    elseif isvector(input1) && isvector(input2)
-                        if ~iscolumn(input1)
-                            input1 = input1';
-                        end
-                        
-                        if ~iscolumn(input2)
-                            input2 = input2';
-                        end                        
-                    end
+                    
                     %Note: MATLAB should error out if the vectors are not
                     %the same size etc.
-                    score = sqrt(sum((input1 - input2).^2,2))';
+                    score = sqrt(sum((input1 - input2).^2,2));
+
                     
                 case 'pxintersect'
                     %Check that the two inputs are both cell arrays of
@@ -278,7 +366,8 @@ classdef TrackLinker
                     end
                     
                     %Calculate the number of intersecting pixels
-                    score = sum(ismember(input1,input2));
+                    %Note: the lowest value = 1 (perfect match)
+                    score = 1/(sum(ismember(input1,input2))/numel(unique([input1 input2])));
                     
                 case 'pxintersectunique'
                     %Check that the two inputs are both cell arrays of
@@ -289,7 +378,7 @@ classdef TrackLinker
                     end
                     
                     %Calculate the number of intersecting pixels
-                    score = sum(ismember(input1,input2)) / numel(unique([input1,input2]));
+                    score = 1/(sum(ismember(input1,input2)) / numel(unique([input1,input2])));
                     
                 otherwise 
                     error('TrackLinker:ComputeScore:UnknownType',...

@@ -101,7 +101,7 @@ classdef test_TrackData < matlab.unittest.TestCase
             trackObj = trackObj.addFrame(8, struct('Area', 40));
            
             TestCase.verifyError(@() trackObj.deleteFrame('s'),...
-                'TrackData:deleteFrame:frameIndexNotNumericOrLogical');
+                'TrackData:deleteFrame:frameIndexCharInvalid');
             
             TestCase.verifyError(@() trackObj.deleteFrame([5, 8, 9]),...
                 'TrackData:deleteFrame:frameIndexInvalid');
@@ -174,6 +174,29 @@ classdef test_TrackData < matlab.unittest.TestCase
             
             %Check that the data is correct
             TestCase.verifyEqual([trackObj.Data.Area],[10, 40]);
+            
+        end
+        
+        function verify_deleteFrame_end(TestCase)
+            
+            trackObj = TrackData(5, struct('Area', 5));
+            trackObj = trackObj.addFrame(6, struct('Area', 10));
+            trackObj = trackObj.addFrame(7, struct('Area', 20));
+            trackObj = trackObj.addFrame(8, struct('Area', 40));
+            trackObj = trackObj.addFrame(9, struct('Area', 80));
+            
+            TestCase.assertEqual(trackObj.StartFrame, 5);
+            TestCase.assertEqual(trackObj.EndFrame, 9);
+            
+            %Delete first frame and check that the start frame index is
+            %reduced
+            trackObj = trackObj.deleteFrame('end');
+            
+            TestCase.verifyEqual(trackObj.NumFrames,4)
+            TestCase.verifyEqual(trackObj.EndFrame,8)
+            
+            %Check that the data is correct
+            TestCase.verifyEqual([trackObj.Data.Area],[5, 10, 20, 40]);
             
         end
         

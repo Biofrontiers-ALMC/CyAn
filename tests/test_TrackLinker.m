@@ -27,18 +27,18 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             obj.assertClass(testObj,'TrackLinker');
         end
         
-        function verify_computeScore_Euclidean_rowvectors(obj)
+        function verify_computeScore_Euclidean_colvectors(obj)
             %Check that the compute score is giving the right values
             
             testObj = TrackLinker;
             
-            AA = [1 4 2 3 4];
-            BB = [1 3 5 3 5];
+            AA = [1 4 2 3 4]';
+            BB = [1 3 5 3 5]';
             
             testScore = testObj.computeScore(AA,BB,'Euclidean');
             
-            expectedResults = zeros(1, size(AA,2));
-            for ii = 1:size(AA,2)
+            expectedResults = zeros(size(AA,1),1);
+            for ii = 1:size(AA,1)
                 expectedResults(ii) = sqrt((AA(ii) - BB(ii)).^2);
             end
             
@@ -55,7 +55,7 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             XY1 = rand(10,2);
             XY2 = [5, 2];
             
-            expectedScore = zeros(1, size(XY1,1));
+            expectedScore = zeros(size(XY1,1),1);
             for ii = 1:size(XY1,1)
                 expectedScore(ii) = sqrt((XY1(ii,1) - XY2(1)).^2 + (XY1(ii,2) - XY2(2)).^2);
             end
@@ -64,30 +64,6 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             
             obj.verifyEqual(testScore, expectedScore);
             
-            
-        end
-                
-        function verify_computeScore_Euclidean_oneCell(obj)
-            %Check that the euclidean score is correct when given a list of
-            %vectors representing xy locations.
-            
-            testObj = TrackLinker;
-            
-            %Make sample data representing XY coordinates
-            XY1 = cell(10,1);
-            for ii = 1:10
-                XY1{ii} = rand(1,2);
-            end
-            XY2 = [5, 2];
-            
-            expectedScore = zeros(1, size(XY1,1));
-            for ii = 1:size(XY1,1)
-                expectedScore(ii) = sqrt((XY1{ii}(1) - XY2(1)).^2 + (XY1{ii}(2) - XY2(2)).^2);
-            end
-            
-            testScore = testObj.computeScore(XY1,XY2,'Euclidean');
-            
-            obj.verifyEqual(testScore, expectedScore);
             
         end
         
@@ -101,7 +77,7 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             
             testScore = testObj.computeScore(AA,BB,'pxintersectunique');
             
-            obj.verifyEqual(testScore, 4/11);
+            obj.verifyEqual(testScore, 1/(4/11));
             
         end
         
@@ -115,7 +91,10 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             
             testScore = testObj.computeScore(AA,BB,'pxintersect');
             
-            obj.verifyEqual(testScore, 4);
+            %Expected score is 1/Jacard similrity index
+            expectedScore = 1/(numel(intersect(AA,BB))/numel(union(AA,BB)));
+            
+            obj.verifyEqual(testScore, expectedScore);
             
         end
         
@@ -135,6 +114,27 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             
         end
 
+        function verify_initializeLinkerWithTracks_ParamList(obj)
+            %Try initializing the linker with new tracks
+            
+            %Create sample track data
+            newTrackData.Area = rand(5,1);
+            newTrackData.Centroid = rand(5,2);
+            
+            %Initialize the linker object
+            linkerObj = TrackLinker(1, 'Area', newTrackData.Area,...
+                'Centroid',newTrackData.Centroid);
+            
+            obj.verifyEqual(numel(linkerObj.TrackArray), 5);
+            
+            for ii = 1:5
+                currTrack = linkerObj.getTrack(ii);
+                obj.verifyEqual(currTrack.Data.Area, newTrackData.Area(ii));
+                obj.verifyEqual(currTrack.Data.Centroid, newTrackData.Centroid(ii));
+            end
+            
+        end
+        
         function verify_stopTrack(obj)
             %Verify that the StopTrack() method works
             
@@ -157,8 +157,9 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             
         end
         
-        function verify_assignToTrack(obj)
-            %Verify that the assignToTrack() method works
+        function verify_assignToTrack_Euclidean(obj)
+            %Verify that the assignToTrack() method works with ;euclidean'
+            %calculation
             
             %Create sample track data
             newTrackData(1).Centroid = [1, 1];
@@ -187,6 +188,98 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             end
             
         end
+        
+        function verify_assignToTrack_PxIntersect(obj)
+            %Test linking with an intersect calculation
+            
+            %Create sample track data
+            newTrackData(1).PixelIdxList = [1, 2, 3, 4, 5];
+            newTrackData(2).PixelIdxList = [10, 11, 12, 13, 14];
+            newTrackData(3).PixelIdxList = [400, 401, 402, 403, 404, 405, 406];
+            
+            %Initialize the linker object
+            linkerObj = TrackLinker(1, newTrackData);
+            linkerObj.LinkedBy = 'PixelIdxList';
+            linkerObj.LinkCalculation = 'PxIntersect';
+            
+            obj.assertEqual(numel(linkerObj.TrackArray), 3);
+            
+            %Make move the tracks slightly.
+            newTrackDataMoved(1).PixelIdxList = [2, 3, 4, 5];
+            newTrackDataMoved(2).PixelIdxList = [12, 13, 14, 16, 20];
+            newTrackDataMoved(3).PixelIdxList = [308, 309, 400, 401, 402];
+            
+            %Assign the new detections to track
+            linkerObj = linkerObj.assignToTrack(2, newTrackDataMoved);
+            
+            %Check that the tracks were assigned correctly
+            for ii = 1:3
+                currTrack = linkerObj.getTrack(ii);
+                obj.verifyEqual(currTrack.Data(1).PixelIdxList, newTrackData(ii).PixelIdxList);
+                obj.verifyEqual(currTrack.Data(2).PixelIdxList, newTrackDataMoved(ii).PixelIdxList);
+            end
+            
+            
+        end
+        
+        function verify_assignToTrack_WithMitosis_PxIntersect(obj)
+            %Test linking with an intersect calculation
+            
+            %Create sample track data
+            origMotherTrack.PixelIdxList = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            randomCell.PixelIdxList = [400, 401, 402, 403, 404, 405, 406];
+                        
+            %Initialize the linker object
+            linkerObj = TrackLinker(1, [origMotherTrack; randomCell]);
+            linkerObj.LinkedBy = 'PixelIdxList';
+            linkerObj.LinkCalculation = 'PxIntersect';
+            linkerObj.TrackMitosis = true;
+            linkerObj.MitosisParameter = 'PixelIdxList';
+            linkerObj.MitosisCalculation = 'pxintersect';
+            linkerObj.MitosisScoreRange = [1, 1/0.3];
+            
+            obj.assertEqual(numel(linkerObj.TrackArray), 2);
+            
+            %Split the mother track
+            newTrackDataMoved(1).PixelIdxList = [1, 2, 3, 4, 5]; %daughter 1
+            newTrackDataMoved(2).PixelIdxList = [6, 7, 8, 9];  %daughter 2
+            newTrackDataMoved(3).PixelIdxList = [308, 309, 400, 401, 402];  %the random cell
+            
+            %Assign the new detections to track
+            linkerObj = linkerObj.assignToTrack(2, newTrackDataMoved);
+            
+            %Check that there are now four tracks (mother, 2 daughters, and
+            %the random cell)
+            obj.assertEqual(numel(linkerObj.TrackArray), 4);
+            
+            %Check that the tracks were assigned correctly
+            motherTrack = linkerObj.getTrack(1);
+            obj.verifyEqual(motherTrack.Data.PixelIdxList, origMotherTrack.PixelIdxList);
+            obj.verifyEqual(motherTrack.DaughterTrackIdxs, [3, 4]);
+            obj.verifyEqual(motherTrack.StartFrame, 1);
+            obj.verifyEqual(motherTrack.EndFrame, 1);
+  
+            d1 = linkerObj.getTrack(3);            
+            obj.verifyEqual(d1.Data.PixelIdxList, newTrackDataMoved(1).PixelIdxList);
+            obj.verifyEqual(d1.MotherTrackIdx, 1);
+            obj.verifyEqual(d1.StartFrame, 2);
+            obj.verifyEqual(d1.EndFrame, 2);
+            
+            d2 = linkerObj.getTrack(4);            
+            obj.verifyEqual(d2.Data.PixelIdxList, newTrackDataMoved(2).PixelIdxList);
+            obj.verifyEqual(d2.MotherTrackIdx, 1);
+            obj.verifyEqual(d2.StartFrame, 2);
+            obj.verifyEqual(d2.EndFrame, 2);
+            
+            randoCell = linkerObj.getTrack(2);            
+            obj.verifyEqual(randoCell.Data(1).PixelIdxList, randomCell.PixelIdxList);
+            obj.verifyEqual(randoCell.Data(2).PixelIdxList, newTrackDataMoved(3).PixelIdxList);
+            obj.verifyEqual(randoCell.MotherTrackIdx, NaN);
+            obj.verifyEqual(randoCell.StartFrame, 1);
+            obj.verifyEqual(randoCell.EndFrame, 2);
+     
+        end
+        
         
     end
     
