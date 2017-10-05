@@ -1,4 +1,4 @@
-classdef TrackDataArray < handle
+classdef TrackDataArray
     %TRACKDATAARRAY  Data class to hold data for multiple tracks
     
     properties (SetAccess = private)
@@ -9,7 +9,7 @@ classdef TrackDataArray < handle
     
     methods
         
-        function addTrack(obj, frameIndex, trackData)
+        function [obj, newTrackId] = addTrack(obj, frameIndex, trackData)
             %ADDTRACK  Add a track to the array
             %
             %  A.ADDTRACK(frameIndex, data) will add a new TrackData
@@ -17,15 +17,36 @@ classdef TrackDataArray < handle
             %  and with the data specified. ''data'' should be a struct.
             
             if isempty(obj.Tracks)
+                newTrackId = 1;
                 obj.Tracks = TrackData(frameIndex,trackData);
                 
             else
-                obj.Tracks(numel(obj) + 1) = TrackData(frameIndex,trackData);
+                newTrackId = numel(obj) + 1;
+                obj.Tracks(newTrackId) = TrackData(frameIndex,trackData);
             end
             
         end
         
-        function deleteTrack(obj, trackIndex)
+        function obj = updateTrack(obj, trackIndex, frameIndex, trackData)
+            %UPDATETRACK  Update the specified track
+            %
+            %  A = A.UPDATETRACK(I, F, D) will update track I, frame F,
+            %  with the data D.
+            
+            if trackIndex > numel(obj)
+                error('TrackDataArray:updateTrack:InvalidIndex',...
+                    'Expected track index to be between 1 and %d.',numel(obj));                
+            end
+            
+            if frameIndex > obj.Tracks(trackIndex).EndFrame || frameIndex < obj.Tracks(trackIndex).FirstFrame
+                obj.Tracks(trackIndex) = obj.Tracks(trackIndex).addFrame(frameIndex, trackData);
+            else
+                obj.Tracks(trackIndex) = obj.Tracks(trackIndex).updateFrame(frameIndex, trackData);
+            end
+            
+        end
+        
+        function obj = deleteTrack(obj, trackIndex)
             %DELETETRACK  Remove a track
             %
             %  A.DELETETRACK(trackIndex) will remove the TrackData object
@@ -40,13 +61,23 @@ classdef TrackDataArray < handle
             
         end
         
+        function trackOut = getTrack(obj, trackIndex)
+            %GETTRACK  Get the selected track
+            %
+            %  T = A.GETTRACK(I) will get the track at index I, returning a
+            %  TrackData object to T.
+            
+            trackOut = obj.Tracks(trackIndex);
+            
+        end
+        
         function numTracks = numel(obj)
             %NUMEL  Count number of TrackData objects in the array 
             
             numTracks = numel(obj.Tracks);
             
         end
-                
+        
     end
     
 end

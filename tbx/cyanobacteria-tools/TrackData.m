@@ -4,9 +4,8 @@ classdef TrackData
     properties (Hidden)
         
         Data
-       
-        StartFrame = Inf;
-        EndFrame = -Inf;
+        FrameIndices
+
         MotherTrackIdx = NaN;
         DaughterTrackIdxs = NaN;
         
@@ -16,6 +15,9 @@ classdef TrackData
         
         TrackDataProps      %Properties to check for
         NumFrames
+        
+        StartFrame = Inf;
+        EndFrame = -Inf;
        
     end
     
@@ -54,6 +56,26 @@ classdef TrackData
                 dataProperties = '';
             else
                 dataProperties = fieldnames(obj.Data);
+            end
+            
+        end
+        
+        function startFrame = get.StartFrame(obj)
+            
+            if isempty(obj.Data)
+                startFrame = -Inf;
+            else
+                startFrame = obj.Data(1).FrameIndex;
+            end
+            
+        end        
+        
+        function endFrame = get.EndFrame(obj)
+            
+            if isempty(obj.Data)
+                endFrame = -Inf;
+            else
+                endFrame = obj.Data(end).FrameIndex;
             end
             
         end
@@ -111,44 +133,49 @@ classdef TrackData
                     'Expected data to be a struct.');                
             end
            
+            %Add the frame index as a field to the data
+            data.FrameIndex = frameIndex;
+            
             %Add the frame to the track
             if frameIndex > obj.EndFrame
 
-                %Add frame to the end of the track
                 if isinf(obj.StartFrame) && isinf(obj.EndFrame)
                     %If both start and end frames are infinite, then this
                     %is the first frame to be added
                     obj.Data = data;
+                    obj.Data(1).FrameIndex = frameIndex;        
                     
-                    %If this is the first frame, also update the start and
-                    %end frames
-                    obj.StartFrame = frameIndex; 
-                    obj.EndFrame = frameIndex;
                 else
-                    %Calculate the index of the data struct relative to the
-                    %start frame
-                    dataInd = frameIndex - obj.StartFrame + 1;
+                    %Calculate the number of frames to add
+                    numFramesToAdd = frameIndex - obj.EndFrame;
                     
-                    %Add the data
-                    obj.Data(dataInd) = data;
+                    %Add missing frames (if any). The missing frames only
+                    %have the 'FrameIndex' property filled.
+                    for iAdditional = 1:(numFramesToAdd - 1)
+                        obj.Data(end + 1).FrameIndex = obj.EndFrame + 1;
+                    end
+
+                    %Add the frame to the end of the array
+                    obj.Data(end + 1) = data;
+                    
                 end
-                 
-                %Update the frame numbers
-                obj.EndFrame = frameIndex;
                                
             elseif frameIndex < obj.StartFrame
-                %Add frame to the start of the track
-                
-                %Calculate the number of spaces to move the data
-                dataInd = obj.StartFrame - frameIndex + 1;
-                
-                %Move the data
+                %Add the new frame to the start and move the old data to
+                %the end.
                 oldData = obj.Data;
-                
                 obj.Data = data;
-                obj.Data(dataInd:dataInd+numel(oldData) - 1) = oldData;
                 
-                obj.StartFrame = frameIndex;
+                %Calculate the element to move the old data to
+                dataInd = oldData(1).FrameIndex - obj.StartFrame + 1;
+   
+                obj.Data(dataInd:dataInd + numel(oldData) - 1) = oldData;
+                
+                %Update the frame indices
+                for ii = 1:dataInd
+                    obj.Data(ii).FrameIndex = frameIndex + (ii - 1);
+                end
+      
                 
             end
             
@@ -158,40 +185,58 @@ classdef TrackData
         function obj = deleteFrame(obj, frameIndex)
             %DELETEFRAME  Deletes the specified frame
             %
-            %  T = T.DELETEFRAME(f, frameIndex) deletes the specified frame
-            %  from the track.
+            %  T = T.DELETEFRAME(f, frameIndex) deletes the specified
+            %  frame(s) from the track.
+            %
+            %  Examples:
+            %
+            %    %Create a track with four frames
+            %    trackObj = TrackData;
+            %    trackObj = trackObj.addFrame(1, struct('Area',5));
+            %    trackObj = trackObj.addFrame(2, struct('Area',10));
+            %    trackObj = trackObj.addFrame(3, struct('Area',20));
+            %    trackObj = trackObj.addFrame(4, struct('Area',40));
+            %
+            %    %Delete frame 2
+            %    trackObj = trackObj.deleteFrame(2);
+            %
+            %    %Delete frames 1 and 4
+            %    trackOb = trackObj.deleteFrame([1, 4]);
             %  
             %  See also: TrackData.updateTrack
             
-            %Validate the frame number
-            if ~isnumeric(frameIndex)
-                error('TrackData:deleteFrame:frameIndexNotNumeric',...
-                    'Expected the frame index to be a number.');
-            else
+            %Validate the frame index input
+            if isnumeric(frameIndex)
                 if ~(all(frameIndex >= obj.StartFrame & frameIndex <= obj.EndFrame))
                     error('TrackData:deleteFrame:frameIndexInvalid',...
                         'The frame index should be between %d and %d.',...
                         obj.StartFrame, obj.EndFrame);
                 end
+                
+                %Convert the frame index into the index for the data array
+                dataInd = frameIndex - obj.StartFrame + 1;
+                
+            elseif islogical(frameIndex)
+                if (numel(frameIndex) ~= obj.NumFrames) || (~isvector(frameIndex))
+                    error('TrackData:deleteFrame:frameIndexInvalidSize',...
+                        'If the frame index is a logical array, it must be a vector with the same number of elements as the number of frames.');
+                end
+                
+                %If it is a logical array, the usual deletion syntax should
+                %work
+                dataInd = frameIndex;
+                
+            else
+                error('TrackData:deleteFrame:frameIndexNotNumericOrLogical',...
+                    'Expected the frame index to be a number or a logical array.');
             end
                        
-            %Convert the frame index into the index for the data array
-            dataInd = frameIndex - obj.StartFrame + 1;
-            
-            %Remove the frame
+            %Remove the frame(s)
             obj.Data(dataInd) = [];
             
-            %Update the start and end frames if the deleted frame was at
-            %the start/end
-            if any(frameIndex == obj.StartFrame)
-                
-                obj.StartFrame = obj.StartFrame + 1;
-            end
-            
-            if any(frameIndex == obj.EndFrame)
-                
-                obj.EndFrame = obj.EndFrame - 1;
-                
+            %Renumber the frames
+            for ii = 2:numel(obj.Data)
+                obj.Data(ii).FrameIndex = obj.StartFrame + ii - 1;
             end
                         
         end

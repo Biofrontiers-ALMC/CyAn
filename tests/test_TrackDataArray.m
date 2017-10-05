@@ -18,8 +18,8 @@ classdef test_TrackDataArray < matlab.unittest.TestCase
             %VERIFY_ADDTRACK  Check that AddTrack works
             
             trackArrayObj = TrackDataArray;
-            trackArrayObj.addTrack(1, struct('Area',5));
-            trackArrayObj.addTrack(1, struct('Area',10));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',5));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',10));
             
             TestCase.verifyEqual(numel(trackArrayObj),2)
             TestCase.verifyEqual(trackArrayObj.Tracks(1).Data(1).Area,5);
@@ -32,14 +32,14 @@ classdef test_TrackDataArray < matlab.unittest.TestCase
             
             %Initialize the array and create three tracks
             trackArrayObj = TrackDataArray;
-            trackArrayObj.addTrack(1, struct('Area',5));
-            trackArrayObj.addTrack(1, struct('Area',10));
-            trackArrayObj.addTrack(1, struct('Area',20));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',5));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',10));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',20));
             
             TestCase.assertEqual(numel(trackArrayObj),3)
             
             %Delete track 2
-            trackArrayObj.deleteTrack(2);
+            trackArrayObj = trackArrayObj.deleteTrack(2);
             
             TestCase.verifyEqual(numel(trackArrayObj),2);
             TestCase.verifyEqual(trackArrayObj.Tracks(2).Data(1).Area,20);
