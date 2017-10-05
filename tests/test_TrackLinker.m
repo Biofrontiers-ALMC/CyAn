@@ -161,9 +161,11 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             %Verify that the assignToTrack() method works
             
             %Create sample track data
-            for ii = 1:5
-                newTrackData(ii).Centroid = round(rand(1, 2) * 10);
-            end
+            newTrackData(1).Centroid = [1, 1];
+            newTrackData(2).Centroid = [10, 10];
+            newTrackData(3).Centroid = [40, 40];
+            newTrackData(4).Centroid = [80, 80];
+            newTrackData(5).Centroid = [100, 100];
             
             %Initialize the linker object
             linkerObj = TrackLinker(1, newTrackData);

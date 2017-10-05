@@ -200,14 +200,16 @@ classdef TrackLinker
                 activeTrackData{iActiveTrack} = currTrack.Data.(obj.LinkedBy)(end);
             end
             
+            %tIDY THIS UP
+            
             newTrackDataLinkingParameter = cat(1,newTrackData.(obj.LinkedBy));
             
             %Calculate linking costs
             costToLink = zeros(numel(obj.activeTracks), numel(newTrackData));
             
             for iExisting = 1:numel(obj.activeTracks)
-                costToLink(iExisting,:) = TrackLinker.computeScore(activeTrackData(iExisting,:),...
-                    newTrackDataLinkingParameter,obj.LinkCalculation);
+                costToLink(:,iExisting) = (TrackLinker.computeScore(activeTrackData(iExisting,:),...
+                    newTrackDataLinkingParameter,obj.LinkCalculation))';
             end
             
             %Assign linking costs which are too high or too low to the
