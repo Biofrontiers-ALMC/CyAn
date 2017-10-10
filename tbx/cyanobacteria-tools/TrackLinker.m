@@ -19,19 +19,16 @@ classdef TrackLinker
         MitosisParameter = 'PixelIdxList';          %What property is used for mitosis detection?
         MitosisCalculation = 'pxintersect';
         MitosisScoreRange = [-Inf, Inf];
+        MitosisLinkToFrame = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
         
         %LAP solver
         LAPSolver = 'lapjv';
        
     end
-    
-    properties (SetAccess = private) %Track data
+   
+    properties (SetAccess = private, Hidden)  %Track data
         
         TrackArray = TrackDataArray;
-        
-    end
-    
-    properties (SetAccess = private, Hidden)  %Last updated tracks
         
         activeTracks = struct('trackIdx',{},...
             'Age',{},...
@@ -51,6 +48,12 @@ classdef TrackLinker
         
         LAPtrackerVersion = '1.0.0';
         reqCelltrackVersion = '1.0.0';
+        
+    end
+    
+    properties (Dependent, Hidden)
+        
+        NumTracks;
         
     end
     
@@ -124,14 +127,20 @@ classdef TrackLinker
                 if assignments(iM) > 0 && assignments(iM) <= nNewData
                     %If an existing track was assigned to a new detection,
                     %then update its current position
-                    obj.TrackArray = obj.TrackArray.updateTrack(iM, frameIndex, newData(assignments(iM)));
+                    obj.TrackArray = obj.TrackArray.updateTrack(obj.activeTracks(iM).trackIdx,...
+                        frameIndex, newData(assignments(iM)));
                     obj.activeTracks(iM).Age = 0;
-                else
                     
+                else
+                    %If the track was not assigned to a new detection, then
+                    %increase its age
                     obj.activeTracks(iM).Age = obj.activeTracks(iM).Age + 1;
                     
                 end
             end
+            
+            %Remove tracks which have not been updated for a long time
+            obj.activeTracks([obj.activeTracks.Age] >= obj.MaxTrackAge) = [];
             
             %Second set of assignments are 'start segments'
             for iN = 1:nNewData
@@ -160,12 +169,25 @@ classdef TrackLinker
                                 %If the track had a recent division, then it is not
                                 %a valid mitosis event
                                 if ~isnan(currTrack.MotherTrackIdx) && (frameIndex - currTrack.StartFrame) < obj.MinAgeSinceMitosis
-                                    mitosisScore([obj.activeTracks.AgeSinceDivision] ) = Inf;
+                                    mitosisScore([obj.activeTracks.AgeSinceDivision] <= obj.MinAgeSinceMitosis ) = Inf;
                                 else
+                                    %Calculate the mitosis score using the
+                                    %options set.
+                                    if (currTrack.NumFrames + obj.MitosisLinkToFrame) < 1
+                                        %Handle the case where there are
+                                        %insufficient prior frames
+                                        mitosisScore(iCol) = Inf;
+                                    else
+                                    
+                                    try
                                     mitosisScore(iCol) = TrackLinker.computeScore(...
                                         newData(iN).(obj.MitosisParameter),...
-                                        currTrack.Data(end - 1).(obj.MitosisParameter),...
+                                        currTrack.Data(end + obj.MitosisLinkToFrame).(obj.MitosisParameter),...
                                         obj.MitosisCalculation);
+                                    catch
+                                        keyboard
+                                    end
+                                    end
                                 end
                             end
                         end
@@ -221,7 +243,7 @@ classdef TrackLinker
                     end
                     
                     if ~isMitosis
-                        %Create a new track
+                        %If not a mitosis event, create a new track
                         obj = obj.CreateNewTrack(frameIndex,newData(newAssignment));
                     end
                 end
@@ -236,6 +258,182 @@ classdef TrackLinker
             
             trackOut = obj.TrackArray.getTrack(trackIndex);
             
+        end
+        
+        function obj = setOptions(obj, varargin)
+            %SETOPTIONS  Set options for the linker
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(parameter, value) will set
+            %  the parameter to value.
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(O) where O is a data object
+            %  with the same property names as the options will work.
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(S) where S is a struct
+            %  with the same fieldnames as the options will also work.
+            %
+            %  Non-matching parameter names will be ignored.
+            
+            if numel(varargin) == 1 && isstruct(varargin{1})
+                %Parse a struct as input
+                
+                inputParameters = fieldnames(varargin{1});
+                
+                for iParam = 1:numel(inputParameters)
+                    if ismember(inputParameters{iParam},properties(obj))
+                        obj.(inputParameters{iParam}) = ...
+                            varargin{1}.(inputParameters{iParam});
+                    else
+                        %Just skip unmatched options
+                    end
+                    
+                end
+                
+            elseif numel(varargin) == 1 && isobject(varargin{1})
+                %Parse an object as input
+                
+                inputParameters = properties(varargin{1});
+                
+                for iParam = 1:numel(inputParameters)
+                    if ismember(inputParameters{iParam},properties(obj))
+                        obj.(inputParameters{iParam}) = ...
+                            varargin{1}.(inputParameters{iParam});
+                    else
+                        %Just skip unmatched options
+                    end
+                    
+                end
+                
+            else
+                if rem(numel(varargin),2) ~= 0
+                    error('Input must be Property/Value pairs.');
+                end
+                inputArgs = reshape(varargin,2,[]);
+                for iArg = 1:size(inputArgs,2)
+                    if ismember(inputArgs{1,iArg},properties(obj))
+                        
+                        obj.(inputArgs{1,iArg}) = inputArgs{2,iArg};
+                    else
+                        %Just skip unmatched options
+                    end
+                end
+            end
+        end
+        
+        function obj = importOptions(obj, importFilename)
+            %IMPORTOPTIONS  Import settings from file
+            %
+            %  S = L.IMPORTOPTIONS(filename) will import
+            %  settings from the file specified.
+            
+            if ~exist('importFilename','var')
+                
+                [filename, pathname] = uigetfile({'*.txt','Text file (*.txt)';...
+                    '*.*','All files (*.*)'},...
+                    'Select output file location');
+                
+                importFilename = fullfile(pathname,filename);
+                
+            end
+            
+            fid = fopen(importFilename,'r');
+            
+            if fid == -1
+                error('TrackLinker:importOptions:ErrorReadingFile',...
+                    'Could not open file %s for reading.',filename);
+            end
+            
+            while ~feof(fid)
+                currLine = strtrim(fgetl(fid));
+                
+                if isempty(currLine)
+                    %Empty lines should be skipped
+                    
+                elseif strcmpi(currLine(1),'%') || strcmpi(currLine(1),'#')
+                    %Lines starting with '%' or '#' are comments, so ignore
+                    %those
+                    
+                else
+                    %Expect the input to be PARAM_NAME = VALUE
+                    parsedLine = strsplit(currLine,'=');
+                    
+                    %Get parameter name (removing spaces)
+                    parameterName = strtrim(parsedLine{1});
+                    
+                    %Get value name (removing spaces)
+                    value = strtrim(parsedLine{2});
+                    
+                    if isempty(value)
+                        %If value is empty, just use the default
+                    else
+                        obj = obj.setOptions(parameterName,eval(value));
+                    end
+                    
+                end
+                
+            end
+            
+            fclose(fid);
+        end
+        
+        function exportOptions(obj, exportFilename)
+            %EXPORTOPTIONS  Export tracking options to a file
+            %
+            %  L.EXPORTOPTIONS(filename) will write the currently set
+            %  options to the file specified. The options are written in
+            %  plaintext, no matter what the extension of the file is.
+            %
+            %  L.EXPORTOPTIONS if the filename is not provided, a dialog
+            %  box will pop-up asking the user to select a location to save
+            %  the file.
+                        
+            if ~exist('exportFilename','var')
+                
+                [filename, pathname] = uiputfile({'*.txt','Text file (*.txt)'},...
+                    'Select output file location');
+                
+                exportFilename = fullfile(pathname,filename);
+                
+            end
+            
+            fid = fopen(exportFilename,'w');
+            
+            if fid == -1
+                error('FRETtrackerOptions:exportSettings:CouldNotOpenFile',...
+                    'Could not open file to write')
+            end
+            
+            propertyList = properties(obj);
+            
+            %Write output data depending on the datatype of the value
+            for ii = 1:numel(propertyList)
+                
+                if ischar(obj.(propertyList{ii}))
+                    fprintf(fid,'%s = ''%s'' \r\n',propertyList{ii}, ...
+                        obj.(propertyList{ii}));
+                    
+                elseif isnumeric(obj.(propertyList{ii}))
+                    fprintf(fid,'%s = %s \r\n',propertyList{ii}, ...
+                        mat2str(obj.(propertyList{ii})));
+                    
+                elseif islogical(obj.(propertyList{ii}))
+                    
+                    if obj.(propertyList{ii})
+                        fprintf(fid,'%s = true \r\n',propertyList{ii});
+                    else
+                        fprintf(fid,'%s = false \r\n',propertyList{ii});
+                    end
+                    
+                end
+                
+            end
+            
+            fclose(fid);            
+            
+        end
+       
+        function numTracks = get.NumTracks(obj)
+            numTracks = numel(obj.TrackArray);
         end
         
     end
@@ -302,7 +500,7 @@ classdef TrackLinker
             for iRow = 1:numel(obj.activeTracks)
                 
                 currTrack = obj.getTrack(obj.activeTracks(iRow).trackIdx);
-                                
+                
                 for iCol = 1:numel(newTrackData)
                     
                     costToLink(iRow, iCol) = TrackLinker.computeScore(...
@@ -331,8 +529,9 @@ classdef TrackLinker
             auxMatrix = costToLink';
             auxMatrix(auxMatrix < Inf) = min(costToLink(costToLink < Inf));
             
+            %Assemble the full cost matrix
             costMat = [costToLink, stopCost; segStartCost, auxMatrix];
-            
+
         end
         
     end
@@ -360,15 +559,26 @@ classdef TrackLinker
                 case 'pxintersect'
                     %Check that the two inputs are both cell arrays of
                     %numbers
+                    if isempty(input2)
+%                         keyboard
+                        score = Inf;
+                        return;
+                        
+                    end
+                    
                     if ~(isvector(input1) && isvector(input2))
                         error('TrackLinker:ComputeScorePxIntersect:InputsNotVector',...
                             'Both inputs must be a vector for ''PxIntersect''.');
                     end
                     
+%                     try
                     %Calculate the number of intersecting pixels
                     %Note: the lowest value = 1 (perfect match)
-                    score = 1/(sum(ismember(input1,input2))/numel(unique([input1 input2])));
-                    
+                    score = 1/(nnz(intersect(input1,input2))/nnz(union(input1,input2)));
+%                     catch
+%                         keyboard
+%                     end
+
                 case 'pxintersectunique'
                     %Check that the two inputs are both cell arrays of
                     %numbers

@@ -249,13 +249,17 @@ classdef TrackData
             end
             
         end
-        
-%         function endInd = end(obj)
-%             
-%             endInd = numel(obj.Data);
-%             
-%         end
-        
+                
+    end
+end
+
+
+
+
+
+
+
+
 %         function varargout = subsref(obj, s)
 %             %SUBSREF  Subscripted reference
 %             
@@ -310,13 +314,6 @@ classdef TrackData
 %                     error('Not a valid indexing expression')
 %             end
 %         end
-    end
-end
-
-
-
-
-
 
 
 

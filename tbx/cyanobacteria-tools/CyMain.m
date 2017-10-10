@@ -3,19 +3,39 @@ classdef CyMain
     
     properties
         
-        ChannelToSegment = '!CStack';
         FrameRange = 1;
         
+        %Segmentation options
+        ChannelToSegment = '!CStack';
+                     
+        %Track linking parameters
+        LinkedBy = 'Centroid';
+        LinkCalculation = 'euclidean';
+        LinkingScoreRange = [-Inf, Inf];
+        
+        MaxTrackAge = 2;
+        
+        %Mitosis detection parameters
+        TrackMitosis = true;
+        MinAgeSinceMitosis = 2;
+        MitosisParameter = 'PixelIdxList';          %What property is used for mitosis detection?
+        MitosisCalculation = 'pxintersect';
+        MitosisScoreRange = [-Inf, Inf];
+        MitosisLinkToFrame = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
+        
+        %LAP solver
+        LAPSolver = 'lapjv';
+                
     end
     
     methods
         
-        function processFile(obj, varargin)
+        function trackLinker = processFile(obj, varargin)
             %PROCESSFILE  Segment and track cells in a video file
             
             ip = inputParser;
             ip.addOptional('Filename','',@(x) ischar(x));
-            ip.addParameter('OutputMovie',false, @(x) islogical(x));
+            ip.addParameter('OutputMovie',true, @(x) islogical(x));
             ip.parse(varargin{:});
             
             if isempty(ip.Results.Filename)
@@ -55,7 +75,7 @@ classdef CyMain
                         
                         %Add the intensity of a channel, weighted by the
                         %number of channels
-                        imgToSegment = imgToSegment + double(bfReader.getPlane(1, iC, iT)) ./ bfReader.sizeC;
+                        imgToSegment = imgToSegment + double(bfReader.getPlane(1, iC, iT));% ./ bfReader.sizeC;
                         
                     end
                     
@@ -63,30 +83,242 @@ classdef CyMain
                     imgToSegment = bfReader.getPlane(1, obj.ChannelToSegment, iT);
                 end
                 
+                %Segment cells and get cell label
+                cellLabels = CyMain.getCellLabels(imgToSegment/max(imgToSegment(:)));
+                
+%                 CyMain.showoverlay(CyMain.normalizeimg(imgToSegment),bwperim(cellLabels),[0 1 0]);
+%                 keyboard
+%                 if iT == 14
+%                     keyboard
+%                     
+%                 end
+                
+                                
+                %Get cell data
+                cellData = CyMain.getCellData(cellLabels, bfReader, iT);
+                
+                if numel(cellData) == 0
+                    warning('No cell data');                    
+                    continue
+                end
+                
+                %Link cells
+                if iT == frameRange(1)
+                    %Set up the cell tracker
+                    trackLinker = TrackLinker(iT, cellData);
+                    trackLinker = trackLinker.setOptions(obj.propsToStruct);
+                else
+                    try
+                    trackLinker = trackLinker.assignToTrack(iT, cellData);
+                    catch
+                        keyboard
+                    end
+                end
+                
+                if ip.Results.OutputMovie
+                   
+                    outputPath = fileparts(filename);       
+                    
+                    if ~exist('vidObj','var')
+                        vidObj = VideoWriter(fullfile(outputPath,'tracks.avi'));
+                        vidObj.FrameRate = 10;
+                        vidObj.Quality = 100;
+                        open(vidObj);
+                    end
+                    
+                    imgOut = CyMain.makeAnnotatedImage(iT, imgToSegment, cellLabels, trackLinker);
+                    vidObj.writeVideo(imgOut);
+                    
+                end
+                
             end
             
-            %Segment cells and get cell label
-            cellLabels = CyMain.getCellLabels(imgToSegment);
-            
-            %Get cell data
-            cellData = CyMain.getCellData(cellLabels, bfReader);
-           
-            %Link cells
-            if iT == frameRange(1)
-                
-                %Set up the cell tracker
-                trackLinker = TrackLinker(iT, cellData, 'LinkedBy', 'OverlapScore');
-                
-            else
-                
-                trackLinker.assignTracks(iT, cellData);
-                
+            if exist('vidObj','var')
+                close(vidObj);
             end
             
-            CyMain.showoverlay(CyMain.normalizeimg(imgToSegment),bwperim(cellLabels),[0 1 0])
             
         end
         
+        function obj = setOptions(obj, varargin)
+            %SETOPTIONS  Set options for the linker
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(parameter, value) will set
+            %  the parameter to value.
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(O) where O is a data object
+            %  with the same property names as the options will work.
+            %
+            %  linkerObj = linkerObj.SETOPTIONS(S) where S is a struct
+            %  with the same fieldnames as the options will also work.
+            %
+            %  Non-matching parameter names will be ignored.
+            
+            if numel(varargin) == 1 && isstruct(varargin{1})
+                %Parse a struct as input
+                
+                inputParameters = fieldnames(varargin{1});
+                
+                for iParam = 1:numel(inputParameters)
+                    if ismember(inputParameters{iParam},fieldnames(obj.options))
+                        obj.options.(inputParameters{iParam}) = ...
+                            varargin{1}.(inputParameters{iParam});
+                    else
+                        %Just skip unmatched options
+                    end
+                    
+                end
+                
+            elseif numel(varargin) == 1 && isobject(varargin{1})
+                %Parse an object as input
+                
+                inputParameters = properties(varargin{1});
+                
+                for iParam = 1:numel(inputParameters)
+                    if ismember(inputParameters{iParam},fieldnames(obj.options))
+                        obj.options.(inputParameters{iParam}) = ...
+                            varargin{1}.(inputParameters{iParam});
+                    else
+                        %Just skip unmatched options
+                    end
+                    
+                end
+                
+            else
+                if rem(numel(varargin),2) ~= 0
+                    error('Input must be Property/Value pairs.');
+                end
+                inputArgs = reshape(varargin,2,[]);
+                for iArg = 1:size(inputArgs,2)
+                    if ismember(inputArgs{1,iArg},properties(obj))
+                        
+                        obj.(inputArgs{1,iArg}) = inputArgs{2,iArg};
+                    else
+                        %Just skip unmatched options
+                    end
+                end
+            end
+        end
+        
+        function obj = importOptions(obj, importFilename)
+            %IMPORTOPTIONS  Import settings from file
+            %
+            %  S = L.IMPORTOPTIONS(filename) will import
+            %  settings from the file specified.
+            
+            if ~exist('importFilename','var')
+                
+                [filename, pathname] = uigetfile({'*.txt','Text file (*.txt)';...
+                    '*.*','All files (*.*)'},...
+                    'Select output file location');
+                
+                importFilename = fullfile(pathname,filename);
+                
+            end
+            
+            fid = fopen(importFilename,'r');
+            
+            if fid == -1
+                error('TrackLinker:importOptions:ErrorReadingFile',...
+                    'Could not open file %s for reading.',filename);
+            end
+            
+            while ~feof(fid)
+                currLine = strtrim(fgetl(fid));
+                
+                if isempty(currLine)
+                    %Empty lines should be skipped
+                    
+                elseif strcmpi(currLine(1),'%') || strcmpi(currLine(1),'#')
+                    %Lines starting with '%' or '#' are comments, so ignore
+                    %those
+                    
+                else
+                    %Expect the input to be PARAM_NAME = VALUE
+                    parsedLine = strsplit(currLine,'=');
+                    
+                    %Get parameter name (removing spaces)
+                    parameterName = strtrim(parsedLine{1});
+                    
+                    %Get value name (removing spaces)
+                    value = strtrim(parsedLine{2});
+                    
+                    if isempty(value)
+                        %If value is empty, just use the default
+                    else
+                        obj = obj.setOptions(parameterName,eval(value));
+                    end
+                    
+                end
+                
+            end
+            
+            fclose(fid);
+        end
+        
+        function exportOptions(obj, exportFilename)
+            %EXPORTOPTIONS  Export tracking options to a file
+            %
+            %  L.EXPORTOPTIONS(filename) will write the currently set
+            %  options to the file specified. The options are written in
+            %  plaintext, no matter what the extension of the file is.
+            %
+            %  L.EXPORTOPTIONS if the filename is not provided, a dialog
+            %  box will pop-up asking the user to select a location to save
+            %  the file.
+            
+            if ~exist('exportFilename','var')
+                
+                [filename, pathname] = uiputfile({'*.txt','Text file (*.txt)'},...
+                    'Select output file location');
+                
+                exportFilename = fullfile(pathname,filename);
+                
+            end
+            
+            fid = fopen(exportFilename,'w');
+            
+            if fid == -1
+                error('FRETtrackerOptions:exportSettings:CouldNotOpenFile',...
+                    'Could not open file to write')
+            end
+            
+            propertyList = properties(obj);
+            
+            %Write output data depending on the datatype of the value
+            for ii = 1:numel(propertyList)
+                
+                if ischar(obj.(propertyList{ii}))
+                    fprintf(fid,'%s = ''%s'' \r\n',propertyList{ii}, ...
+                        obj.(propertyList{ii}));
+                    
+                elseif isnumeric(obj.(propertyList{ii}))
+                    fprintf(fid,'%s = %s \r\n',propertyList{ii}, ...
+                        mat2str(obj.(propertyList{ii})));
+                    
+                elseif islogical(obj.(propertyList{ii}))
+                    
+                    if obj.(propertyList{ii})
+                        fprintf(fid,'%s = true \r\n',propertyList{ii});
+                    else
+                        fprintf(fid,'%s = false \r\n',propertyList{ii});
+                    end
+                    
+                end
+                
+            end
+            
+            fclose(fid);
+            
+        end
+        
+        function sOut = propsToStruct(obj)
+            
+            propList = properties(obj);
+            for iP = 1:numel(propList)
+                sOut.(propList{iP}) = obj.(propList{iP});
+            end
+        end
     end
     
     methods (Static)
@@ -113,9 +345,14 @@ classdef CyMain
             end
             
             
-            thLvl = CyMain.getThreshold(cellImage);
+%             thLvl = CyMain.getThreshold(cellImage);
             
+%             cellImage = medfilt2(cellImage,[5 5]);
+
+            thLvl = prctile(cellImage, 20);
+
             mask = cellImage > thLvl;
+%             mask = imbinarize(cellImage);
             
             mask = imopen(mask,strel('disk',2));
             mask = imclearborder(mask);
@@ -163,18 +400,23 @@ classdef CyMain
             %
             %  T = CyMain.GETTHRESHOLD(I) will look for a suitable
             %  greyscale level T to binarize image I.
-            
+%             
             [nCnts, binEdges] = histcounts(imageIn(:),150);
             binCenters = diff(binEdges) + binEdges(1:end-1);
             
-            nCnts = smooth(nCnts,3);
-            nCnts(1) = 0;
-            [~,locs] = findpeaks(nCnts,'Npeaks',2,'sortStr','descend','MinPeakDistance',5);
+            %nCnts = smooth(nCnts,3);
+%            nCnts(1) = 0;
+            %[~,locs] = findpeaks(nCnts,'Npeaks',2,'sortStr','descend','MinPeakDistance',5);
+                        
+            %Determine the background intensity level
+            [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
             
-            %Find valley
-            [~,valleyLoc] = min(nCnts(locs(1):locs(2)));
+            thLvl = find(nCnts(locs:end) <= 0.2 * nCnts(locs));
             
-            thLvl = binCenters(valleyLoc + locs(1));
+%             %Find valley
+%             [~,valleyLoc] = min(nCnts(locs(1):locs(2)));
+%             
+%             thLvl = binCenters(valleyLoc + locs(1));
             
             if isempty(thLvl)
                 warning('Threshold level not found')
@@ -338,6 +580,58 @@ classdef CyMain
                 eval(['imageOut = ',inputClass,'(imageOut);']);
             end
             
+        end
+        
+        function cellData = getCellData(cellLabels, bfReader, iT)
+            %GETCELLDATA  Get cell data (Should this be Abstract?)
+            
+            %Let's get basic data for now
+            
+            %Get standard data
+            cellData = regionprops(cellLabels, ...
+                    'Area','Centroid','PixelIdxList','MajorAxisLength', 'MinorAxisLength');
+
+            %Remove non-existing data
+            cellData([cellData.Area] ==  0) = [];
+
+            %Get intensity data
+            for iC = 1:bfReader.sizeC
+                currImage = bfReader.getPlane(1, iC, iT);
+                
+                for iCell = 1:numel(cellData)
+                    cellData(iCell).(sprintf('channel%d',iC)).TotalIntensity = ...
+                        sum(currImage(cellData(iCell).PixelIdxList));
+                end
+            end
+            
+        end
+        
+        function imgOut = makeAnnotatedImage(iT, baseImage, cellMasks, trackData)
+            
+            imgOut = CyMain.showoverlay(CyMain.normalizeimg(double(baseImage)),...
+                bwperim(cellMasks),[0 1 0]);
+            
+            if iT >= 2
+                
+                for iTrack = 1:trackData.NumTracks
+                    
+                    currTrack = trackData.getTrack(iTrack);
+                    
+                    if iT > currTrack.StartFrame && iT <= currTrack.EndFrame
+                        
+                        trackCentroid = cat(2,currTrack.Data.Centroid);
+                        
+                        imgOut = insertShape(imgOut, 'line', trackCentroid, 'color','white');
+                        
+                        imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
+                            'BoxOpacity', 0,'TextColor','yellow');
+                        
+                    end
+                    
+
+                    
+                end
+            end
         end
         
     end

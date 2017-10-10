@@ -35,10 +35,8 @@ classdef test_CyMain < matlab.unittest.TestCase
             %Run a test on a single file
             
             testObj = CyMain;
+            testObj.FrameRange = 1:10;
             obj.verifyWarningFree(@() testObj.processFile(obj.testFile));
-            
-            
-                        
             
         end
     end

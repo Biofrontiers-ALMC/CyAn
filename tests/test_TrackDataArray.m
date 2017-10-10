@@ -46,6 +46,25 @@ classdef test_TrackDataArray < matlab.unittest.TestCase
                     
         end
                
+        function verify_updateTrack(TestCase)
+            %Check that the update track method works
+            
+            %Initialize an track array by adding two tracks
+            trackArrayObj = TrackDataArray;
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',5));
+            trackArrayObj = trackArrayObj.addTrack(1, struct('Area',3));
+            
+            %Update the tracks by adding additional frames
+            trackArrayObj = trackArrayObj.updateTrack(1, 2, struct('Area',50));
+            trackArrayObj = trackArrayObj.updateTrack(2, 2, struct('Area',30));
+            
+            TestCase.verifyEqual(numel(trackArrayObj),2)
+            TestCase.verifyEqual([trackArrayObj.Tracks(1).Data.Area],[5, 50]);
+            TestCase.verifyEqual([trackArrayObj.Tracks(2).Data.Area],[3, 30]);
+            
+        end
+        
+        
     end
     
 end

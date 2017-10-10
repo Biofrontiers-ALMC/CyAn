@@ -25,6 +25,13 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             %Make sure that the object is named correctly
             testObj = TrackLinker;
             obj.assertClass(testObj,'TrackLinker');
+            
+            %Check that this is the TrackLinker object is from this project
+            whichTL = which('TrackLinker.m');
+            currFolder = pwd;
+            
+            obj.assertNotEmpty(strncmp(currFolder, whichTL, length(currFolder)));
+               
         end
         
         function verify_computeScore_Euclidean_colvectors(obj)
@@ -277,9 +284,38 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             obj.verifyEqual(randoCell.MotherTrackIdx, NaN);
             obj.verifyEqual(randoCell.StartFrame, 1);
             obj.verifyEqual(randoCell.EndFrame, 2);
-     
         end
         
+                
+        
+        function verify_import_exportSettings(obj)
+            %Verify that import and export works
+            
+            %Create a TrackLinker object and change some of the properties
+            linkerObj1 = TrackLinker;
+            linkerObj1.LinkedBy = 'PixelValues';
+            linkerObj1.LinkCalculation = 'PxIntersect';
+            linkerObj1.LAPSolver = 'munkres';
+            
+            %Export these settings
+            obj.verifyWarningFree(@() linkerObj1.exportOptions('temp_settings.txt'));
+            
+            %Create a new object
+            linkerObjNew = TrackLinker;
+            
+            %Import the settings
+            linkerObjNew = linkerObjNew.importOptions('temp_settings.txt');
+            
+            %Check that the imported settings match
+            linkerProps = properties(linkerObj1);
+            for iP = 1:numel(linkerProps)
+                obj.verifyEqual(linkerObj1.(linkerProps{iP}), linkerObjNew.(linkerProps{iP}));
+            end
+            
+            %Remove the temp_settings txt file
+            delete('temp_settings.txt');
+            
+        end
         
     end
     
