@@ -1,9 +1,15 @@
 classdef TrackDataArray
     %TRACKDATAARRAY  Data class to hold data for multiple tracks
     
-    properties (SetAccess = private)
+    properties (Access = private)
         
-        Tracks  %TrackData objects
+        Tracks  %Array of TrackData objects
+        
+    end
+    
+    properties (Constant, Hidden)
+        
+        CreatedOn = datestr(now); %Timestamp when object was created
         
     end
     
@@ -38,7 +44,7 @@ classdef TrackDataArray
                     'Expected track index to be between 1 and %d.',numel(obj));                
             end
             
-            if frameIndex > obj.Tracks(trackIndex).EndFrame || frameIndex < obj.Tracks(trackIndex).FirstFrame
+            if frameIndex > obj.Tracks(trackIndex).LastFrame || frameIndex < obj.Tracks(trackIndex).FirstFrame
                 obj.Tracks(trackIndex) = obj.Tracks(trackIndex).addFrame(frameIndex, trackData);
             else
                 obj.Tracks(trackIndex) = obj.Tracks(trackIndex).updateFrame(frameIndex, trackData);
@@ -79,13 +85,13 @@ classdef TrackDataArray
         
         function obj = updateMotherTrackIdx(obj, trackIndex, motherTrackIdx)
             
-            obj.Tracks(trackIndex).MotherTrackIdx = motherTrackIdx;
+            obj.Tracks(trackIndex).MotherIdx = motherTrackIdx;
             
         end
         
         function obj = updateDaughterTrackIdxs(obj, trackIndex, daughterTrackIdxs)
             
-            obj.Tracks(trackIndex).DaughterTrackIdxs = daughterTrackIdxs;
+            obj.Tracks(trackIndex).DaughterIdxs = daughterTrackIdxs;
             
         end
         

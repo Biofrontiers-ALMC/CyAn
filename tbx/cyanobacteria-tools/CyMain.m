@@ -3,10 +3,13 @@ classdef CyMain
     
     properties
         
-        FrameRange = 1;
+        FrameRange = Inf;        
+        SeriesRange = 2;
+        OutputMovie = true;
         
         %Segmentation options
         ChannelToSegment = '!CStack';
+        ThresholdLevel = 0.05;
                      
         %Track linking parameters
         LinkedBy = 'Centroid';
@@ -25,19 +28,22 @@ classdef CyMain
         
         %LAP solver
         LAPSolver = 'lapjv';
+        
+        EnableParallel = false;
                 
     end
     
     methods
         
-        function trackLinker = processFile(obj, varargin)
+        function trackLinker = processFiles(obj, varargin)
             %PROCESSFILE  Segment and track cells in a video file
             
             ip = inputParser;
             ip.addOptional('Filename','',@(x) ischar(x));
-            ip.addParameter('OutputMovie',true, @(x) islogical(x));
+            ip.addParameter('OutputDir',0, @(x) exist(x,'dir'));
             ip.parse(varargin{:});
             
+            %Validate the inputs
             if isempty(ip.Results.Filename)
                 [fname, fpath] = uigetfile({'*.nd2','ND2 file (*.nd2)'},...
                     'Select a file');
@@ -51,6 +57,25 @@ classdef CyMain
                 
             else
                 filename = ip.Results.Filename;
+                
+            end
+            
+            %Prompt user for a directory to save output files to
+            if ip.Results.OutputDir == 0
+                
+                startPath = fileparts(filename);
+                
+                outputDir = uigetdir(startPath, 'Select output directory');
+                
+                if outputDir == 0
+                    %Processing cancelled
+                    return;
+                end
+                
+            else
+                
+                outputDir = ip.Results.Filename;
+                
             end
             
             %Get a reader object for the image
@@ -64,79 +89,91 @@ classdef CyMain
                 frameRange = obj.FrameRange;
             end
             
-            %Segment cells
-            for iT = frameRange
+            for iSeries = obj.SeriesRange
                 
-                %Get image to segment
-                if strcmpi(obj.ChannelToSegment,'!CStack')
+                %Set the image series number
+                bfReader.series = iSeries;
+                
+                %Segment cells
+                for iT = frameRange
                     
-                    imgToSegment = zeros(bfReader.height, bfReader.width);
-                    for iC = 1:bfReader.sizeC
+                    %Get image to segment
+                    if strcmpi(obj.ChannelToSegment,'!CStack')
                         
-                        %Add the intensity of a channel, weighted by the
-                        %number of channels
-                        imgToSegment = imgToSegment + double(bfReader.getPlane(1, iC, iT));% ./ bfReader.sizeC;
+                        imgToSegment = zeros(bfReader.height, bfReader.width);
+                        for iC = 1:bfReader.sizeC
+                            
+                            %Add the intensity of a channel, weighted by the
+                            %number of channels
+                            imgToSegment = imgToSegment + double(bfReader.getPlane(1, iC, iT));% ./ bfReader.sizeC;
+                            
+                        end
+                        
+                    else
+                        imgToSegment = bfReader.getPlane(1, obj.ChannelToSegment, iT);
+                    end
+                    
+                    %Segment cells and get cell label
+                    cellLabels = CyMain.getCellLabels(imgToSegment);
+                    
+                    %Get cell data
+                    cellData = CyMain.getCellData(cellLabels, bfReader, iT);
+                    
+                    if numel(cellData) == 0
+                        warning('No cell data');
+                        continue
+                    end
+
+                    %Debugging
+                    if iT == 13
+                        keyboard                        
+                    end
+                                        
+                    %Link cells
+                    if iT == frameRange(1)
+                        %Set up the cell tracker
+                        trackLinker = TrackLinker(iT, cellData);
+                        trackLinker = trackLinker.setOptions(obj.propsToStruct);
+                    else
+                        try
+                            trackLinker = trackLinker.assignToTrack(iT, cellData);
+                        catch
+                            keyboard
+                        end
+                    end
+                    
+                    if obj.OutputMovie
+                        
+                        [~, fname] = fileparts(filename);
+                        
+                        if ~exist('vidObj','var')
+                            vidObj = VideoWriter(fullfile(outputDir,sprintf('%s_series%d.avi',fname,iSeries)));
+                            vidObj.FrameRate = 10;
+                            vidObj.Quality = 100;
+                            open(vidObj);
+                        end
+                        
+                        imgOut = CyMain.makeAnnotatedImage(iT, imgToSegment, cellLabels, trackLinker);
+                        vidObj.writeVideo(imgOut);
                         
                     end
                     
-                else
-                    imgToSegment = bfReader.getPlane(1, obj.ChannelToSegment, iT);
                 end
                 
-                %Segment cells and get cell label
-                cellLabels = CyMain.getCellLabels(imgToSegment/max(imgToSegment(:)));
-                
-%                 CyMain.showoverlay(CyMain.normalizeimg(imgToSegment),bwperim(cellLabels),[0 1 0]);
-%                 keyboard
-%                 if iT == 14
-%                     keyboard
-%                     
-%                 end
-                
-                                
-                %Get cell data
-                cellData = CyMain.getCellData(cellLabels, bfReader, iT);
-                
-                if numel(cellData) == 0
-                    warning('No cell data');                    
-                    continue
+                if exist('vidObj','var')
+                    close(vidObj);
+                    clear vidObj
                 end
                 
-                %Link cells
-                if iT == frameRange(1)
-                    %Set up the cell tracker
-                    trackLinker = TrackLinker(iT, cellData);
-                    trackLinker = trackLinker.setOptions(obj.propsToStruct);
-                else
-                    try
-                    trackLinker = trackLinker.assignToTrack(iT, cellData);
-                    catch
-                        keyboard
-                    end
-                end
-                
-                if ip.Results.OutputMovie
-                   
-                    outputPath = fileparts(filename);       
-                    
-                    if ~exist('vidObj','var')
-                        vidObj = VideoWriter(fullfile(outputPath,'tracks.avi'));
-                        vidObj.FrameRate = 10;
-                        vidObj.Quality = 100;
-                        open(vidObj);
-                    end
-                    
-                    imgOut = CyMain.makeAnnotatedImage(iT, imgToSegment, cellLabels, trackLinker);
-                    vidObj.writeVideo(imgOut);
-                    
-                end
-                
+                %Save the data
+                trackArray = trackLinker.getTrackArray; %#ok<NASGU>
+                save(fullfile(outputDir, sprintf('%s_series%d.mat',fname, iSeries)), 'trackArray');
+                clear trackArray
             end
+                       
             
-            if exist('vidObj','var')
-                close(vidObj);
-            end
-            
+            %Save the settings file
+            obj.exportOptions(fullfile(outputDir,'settings.txt'));
             
         end
         
@@ -344,20 +381,16 @@ classdef CyMain
                 
             end
             
-            
-%             thLvl = CyMain.getThreshold(cellImage);
-            
-%             cellImage = medfilt2(cellImage,[5 5]);
 
-            thLvl = prctile(cellImage, 20);
-
-            mask = cellImage > thLvl;
-%             mask = imbinarize(cellImage);
+            %Normalize the cellImage
+            cellImage = normalizeimg(cellImage);
+            
+            mask = cellImage > 0.05;
             
             mask = imopen(mask,strel('disk',2));
             mask = imclearborder(mask);
             
-            mask = activecontour(cellImage,mask);
+            %mask = activecontour(cellImage,mask);
             
             mask = bwareaopen(mask,100);
             mask = imopen(mask,strel('disk',2));
@@ -607,17 +640,22 @@ classdef CyMain
         end
         
         function imgOut = makeAnnotatedImage(iT, baseImage, cellMasks, trackData)
+            %MAKEANNOTATEDIMAGE  Make annotated images
             
             imgOut = CyMain.showoverlay(CyMain.normalizeimg(double(baseImage)),...
                 bwperim(cellMasks),[0 1 0]);
             
-            if iT >= 2
+            %Write frame number on top right
+            imgOut = insertText(imgOut,[size(baseImage,2), 1],iT,...
+                'BoxOpacity',0,'TextColor','white','AnchorPoint','RightTop');
+                        
+%             if iT >= 2
                 
                 for iTrack = 1:trackData.NumTracks
                     
                     currTrack = trackData.getTrack(iTrack);
                     
-                    if iT > currTrack.StartFrame && iT <= currTrack.EndFrame
+                    if iT > currTrack.FirstFrame && iT <= currTrack.LastFrame
                         
                         trackCentroid = cat(2,currTrack.Data.Centroid);
                         
@@ -626,12 +664,11 @@ classdef CyMain
                         imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
                             'BoxOpacity', 0,'TextColor','yellow');
                         
-                    end
-                    
-
+                    end                  
                     
                 end
-            end
+                
+%             end
         end
         
     end

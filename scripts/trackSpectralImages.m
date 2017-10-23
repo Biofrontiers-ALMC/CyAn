@@ -14,5 +14,6 @@ analyzerObj.ChannelToSegment = '!CStack';
 analyzerObj.MitosisScoreRange = [1, 1/0.3];
 analyzerObj.MitosisLinkToFrame = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
 
-linker = analyzerObj.processFile('D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\data\17_08_30 2% agarose_561\MOVIE_10min_561.nd2');
-
+tic;
+linker = analyzerObj.processFiles('D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\data\17_08_30 2% agarose_561\MOVIE_10min_561.nd2');
+toc;

@@ -1,8 +1,5 @@
 classdef TrackLinker
-    % LAPTRACKER  Associates tracks using the linear assignment framework
-    %     
-    %
-    %   See also: timeseriesdata
+    %TRACKLINKER  Associates tracks using the linear assignment framework
     
     properties  %List of tracking parameters
        
@@ -159,7 +156,7 @@ classdef TrackLinker
                         mitosisScore = zeros(1, numel(obj.activeTracks));
                         for iCol = 1:numel(obj.activeTracks)
                             if obj.activeTracks(iCol).Age > 0
-                                %If the track was not updates this frame, then it
+                                %If the track was not updated this frame, then it
                                 %is not a valid mitosis event
                                 mitosisScore(iCol) = Inf;
                             else
@@ -168,8 +165,8 @@ classdef TrackLinker
                                 
                                 %If the track had a recent division, then it is not
                                 %a valid mitosis event
-                                if ~isnan(currTrack.MotherTrackIdx) && (frameIndex - currTrack.StartFrame) < obj.MinAgeSinceMitosis
-                                    mitosisScore([obj.activeTracks.AgeSinceDivision] <= obj.MinAgeSinceMitosis ) = Inf;
+                                if ~isnan(currTrack.MotherIdx) && (frameIndex - currTrack.FirstFrame) < obj.MinAgeSinceMitosis
+                                    mitosisScore(iCol) = Inf;
                                 else
                                     %Calculate the mitosis score using the
                                     %options set.
@@ -179,14 +176,14 @@ classdef TrackLinker
                                         mitosisScore(iCol) = Inf;
                                     else
                                     
-                                    try
-                                    mitosisScore(iCol) = TrackLinker.computeScore(...
-                                        newData(iN).(obj.MitosisParameter),...
-                                        currTrack.Data(end + obj.MitosisLinkToFrame).(obj.MitosisParameter),...
-                                        obj.MitosisCalculation);
-                                    catch
-                                        keyboard
-                                    end
+                                        try
+                                            mitosisScore(iCol) = TrackLinker.computeScore(...
+                                                newData(iN).(obj.MitosisParameter),...
+                                                currTrack.Data(end + obj.MitosisLinkToFrame).(obj.MitosisParameter),...
+                                                obj.MitosisCalculation);
+                                        catch
+                                            keyboard
+                                        end
                                     end
                                 end
                             end
@@ -204,12 +201,12 @@ classdef TrackLinker
                             
                             %If it is a mitosis event:
                             %  (1) Create two new daughter tracks
-                            %  (2) Update the MotherTrackIdx in the daughter tracks
+                            %  (2) Update the MotherIdx in the daughter tracks
                             %  (3)
                             %  (2) Remove the last entry in the mother track
                             %  (3) Stop tracking the mother track (remove from
                             %     activeTracks)
-                            %  (4) Update MotherTrackIdx and daughterIdx for the
+                            %  (4) Update MotherIdx and daughterIdx for the
                             %  tracks
                             
                             %Get the mother track index
@@ -434,6 +431,16 @@ classdef TrackLinker
        
         function numTracks = get.NumTracks(obj)
             numTracks = numel(obj.TrackArray);
+        end
+        
+        function trackArray = getTrackArray(obj)
+            %GETTRACKARRAY  Get track array
+            %
+            %  A = L.GETTRACKARRAY returns the track array object A
+            %  containing the cell tracks.
+            
+            trackArray = obj.TrackArray;
+            
         end
         
     end

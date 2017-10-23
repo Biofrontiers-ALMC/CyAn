@@ -31,7 +31,7 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             currFolder = pwd;
             
             obj.assertNotEmpty(strncmp(currFolder, whichTL, length(currFolder)));
-               
+            
         end
         
         function verify_computeScore_Euclidean_colvectors(obj)
@@ -120,7 +120,7 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             obj.verifyEqual(numel(linkerObj.TrackArray), 5);
             
         end
-
+        
         function verify_initializeLinkerWithTracks_ParamList(obj)
             %Try initializing the linker with new tracks
             
@@ -235,7 +235,7 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             %Create sample track data
             origMotherTrack.PixelIdxList = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
             randomCell.PixelIdxList = [400, 401, 402, 403, 404, 405, 406];
-                        
+            
             %Initialize the linker object
             linkerObj = TrackLinker(1, [origMotherTrack; randomCell]);
             linkerObj.LinkedBy = 'PixelIdxList';
@@ -262,31 +262,95 @@ classdef test_TrackLinker < matlab.unittest.TestCase
             %Check that the tracks were assigned correctly
             motherTrack = linkerObj.getTrack(1);
             obj.verifyEqual(motherTrack.Data.PixelIdxList, origMotherTrack.PixelIdxList);
-            obj.verifyEqual(motherTrack.DaughterTrackIdxs, [3, 4]);
-            obj.verifyEqual(motherTrack.StartFrame, 1);
-            obj.verifyEqual(motherTrack.EndFrame, 1);
-  
-            d1 = linkerObj.getTrack(3);            
+            obj.verifyEqual(motherTrack.DaughterIdxs, [3, 4]);
+            obj.verifyEqual(motherTrack.FirstFrame, 1);
+            obj.verifyEqual(motherTrack.LastFrame, 1);
+            
+            d1 = linkerObj.getTrack(3);
             obj.verifyEqual(d1.Data.PixelIdxList, newTrackDataMoved(1).PixelIdxList);
-            obj.verifyEqual(d1.MotherTrackIdx, 1);
-            obj.verifyEqual(d1.StartFrame, 2);
-            obj.verifyEqual(d1.EndFrame, 2);
+            obj.verifyEqual(d1.MotherIdx, 1);
+            obj.verifyEqual(d1.FirstFrame, 2);
+            obj.verifyEqual(d1.LastFrame, 2);
             
-            d2 = linkerObj.getTrack(4);            
+            d2 = linkerObj.getTrack(4);
             obj.verifyEqual(d2.Data.PixelIdxList, newTrackDataMoved(2).PixelIdxList);
-            obj.verifyEqual(d2.MotherTrackIdx, 1);
-            obj.verifyEqual(d2.StartFrame, 2);
-            obj.verifyEqual(d2.EndFrame, 2);
+            obj.verifyEqual(d2.MotherIdx, 1);
+            obj.verifyEqual(d2.FirstFrame, 2);
+            obj.verifyEqual(d2.LastFrame, 2);
             
-            randoCell = linkerObj.getTrack(2);            
+            randoCell = linkerObj.getTrack(2);
             obj.verifyEqual(randoCell.Data(1).PixelIdxList, randomCell.PixelIdxList);
             obj.verifyEqual(randoCell.Data(2).PixelIdxList, newTrackDataMoved(3).PixelIdxList);
-            obj.verifyEqual(randoCell.MotherTrackIdx, NaN);
-            obj.verifyEqual(randoCell.StartFrame, 1);
-            obj.verifyEqual(randoCell.EndFrame, 2);
+            obj.verifyEqual(randoCell.MotherIdx, NaN);
+            obj.verifyEqual(randoCell.FirstFrame, 1);
+            obj.verifyEqual(randoCell.LastFrame, 2);
         end
         
-                
+        function verify_assignToTrack_WithMultipleMitosis_PxIntersect(obj)
+            %Test linking with an intersect calculation
+            
+            %Create sample track data
+            origMotherTrack.PixelIdxList = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            origMotherTrack2.PixelIdxList = 100:110;
+            
+            %Initialize the linker object
+            linkerObj = TrackLinker(1, [origMotherTrack; origMotherTrack2]);
+            linkerObj.LinkedBy = 'PixelIdxList';
+            linkerObj.LinkCalculation = 'PxIntersect';
+            linkerObj.TrackMitosis = true;
+            linkerObj.MitosisParameter = 'PixelIdxList';
+            linkerObj.MitosisCalculation = 'pxintersect';
+            linkerObj.MitosisScoreRange = [1, 1/0.3];
+            
+            obj.assertEqual(numel(linkerObj.TrackArray), 2);
+            
+            %Split the mother track
+            newTrackDataMoved(1).PixelIdxList = [1, 2, 3, 4, 5]; %daughter 1
+            newTrackDataMoved(2).PixelIdxList = [6, 7, 8, 9];  %daughter 2
+            
+            newTrackDataMoved(3).PixelIdxList = [100, 101, 102, 103];  %daughter 1
+            newTrackDataMoved(4).PixelIdxList = [104, 105, 106, 107,108];  %daughter 2
+            
+            
+            %Assign the new detections to track
+            linkerObj = linkerObj.assignToTrack(2, newTrackDataMoved);
+            
+            %Check that there are now six tracks (4 daughters, and
+            %2 mothers)
+            obj.assertEqual(numel(linkerObj.TrackArray), 6);
+            
+            %Check that the tracks were assigned correctly
+            motherTrack = linkerObj.getTrack(1);
+            obj.verifyEqual(motherTrack.Data.PixelIdxList, origMotherTrack.PixelIdxList);
+            obj.verifyEqual(motherTrack.DaughterIdxs, [3, 4]);
+            obj.verifyEqual(motherTrack.FirstFrame, 1);
+            obj.verifyEqual(motherTrack.LastFrame, 1);
+            
+            d1 = linkerObj.getTrack(3);
+            obj.verifyEqual(d1.Data.PixelIdxList, newTrackDataMoved(1).PixelIdxList);
+            obj.verifyEqual(d1.MotherIdx, 1);
+            obj.verifyEqual(d1.FirstFrame, 2);
+            obj.verifyEqual(d1.LastFrame, 2);
+            
+            d2 = linkerObj.getTrack(4);
+            obj.verifyEqual(d2.Data.PixelIdxList, newTrackDataMoved(2).PixelIdxList);
+            obj.verifyEqual(d2.MotherIdx, 1);
+            obj.verifyEqual(d2.FirstFrame, 2);
+            obj.verifyEqual(d2.LastFrame, 2);
+            
+            %--- Mother 2 (should be sufficient to test the track idxs---%
+            motherTrack = linkerObj.getTrack(2);
+            obj.verifyEqual(motherTrack.DaughterIdxs, [5, 6]);
+            
+            d1 = linkerObj.getTrack(5);
+            obj.verifyEqual(d1.Data.PixelIdxList, newTrackDataMoved(3).PixelIdxList);
+            obj.verifyEqual(d1.MotherIdx, 2);
+            
+            d2 = linkerObj.getTrack(6);
+            obj.verifyEqual(d2.Data.PixelIdxList, newTrackDataMoved(4).PixelIdxList);
+            obj.verifyEqual(d2.MotherIdx, 2);
+            
+        end
         
         function verify_import_exportSettings(obj)
             %Verify that import and export works
@@ -339,5 +403,5 @@ classdef test_TrackLinker < matlab.unittest.TestCase
         end
         
     end
-   
+    
 end

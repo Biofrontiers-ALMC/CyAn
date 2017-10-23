@@ -2,6 +2,9 @@
 
 ## Version 0.0.1 (Release date: *TBA*)
 
+2017-10-20
+
+
 *2017-10-03*
 * Started writing TrackDataArray and TrackData classes
 

@@ -1,23 +1,29 @@
 classdef TrackData
     %TRACKDATA  Data class to hold data for a single track
+    %
+    %  T = TRACKDATA will create an empty TrackData object.
+    %
+    %  TrackData Properties:
+    %
+    %  TrackData Methods:
     
     properties (Hidden)
-        
         Data
-        FrameIndices
-        
-        MotherTrackIdx = NaN;
-        DaughterTrackIdxs = NaN;
-        
+        FrameIndex
+    end
+    
+    properties
+        MotherIdx = NaN;
+        DaughterIdxs = NaN;
     end
     
     properties (Dependent)
         
-        TrackDataProps      %Properties to check for
-        NumFrames
+        TrackDataProps
         
-        StartFrame = Inf;
-        EndFrame = -Inf;
+        FirstFrame
+        LastFrame
+        NumFrames
         
     end
     
@@ -42,7 +48,7 @@ classdef TrackData
         function numFrames = get.NumFrames(obj)
             %GET.NUMFRAMES  Get number of frames
             
-            numFrames = (obj.EndFrame - obj.StartFrame) + 1;
+            numFrames = (obj.LastFrame - obj.FirstFrame) + 1;
             
         end
         
@@ -60,27 +66,27 @@ classdef TrackData
             
         end
         
-        function startFrame = get.StartFrame(obj)
+        function firstFrame = get.FirstFrame(obj)
             
             if isempty(obj.Data)
-                startFrame = -Inf;
+                firstFrame = -Inf;
             else
-                startFrame = obj.Data(1).FrameIndex;
+                firstFrame = obj.FrameIndex(1);
             end
             
         end
         
-        function endFrame = get.EndFrame(obj)
+        function lastFrame = get.LastFrame(obj)
             
             if isempty(obj.Data)
-                endFrame = -Inf;
+                lastFrame = -Inf;
             else
-                endFrame = obj.Data(end).FrameIndex;
+                lastFrame = obj.FrameIndex(end);
             end
             
         end
         
-        function obj = addFrame(obj, frameIndex, data)
+        function obj = addFrame(obj, tFrame, data)
             %ADDFRAME  Add data for a frame
             %
             %  T = T.ADDFRAME(f, dataStruct) adds a new frame at index f to
@@ -110,20 +116,20 @@ classdef TrackData
             %  See also: TrackData.updateTrack
             
             %Validate the frame number
-            if ~isnumeric(frameIndex)
+            if ~isnumeric(tFrame)
                 error('TrackData:addFrame:frameIndexNotNumeric',...
                     'Expected the frame index to be a number.');
                 
-            elseif ~isscalar(frameIndex)
+            elseif ~isscalar(tFrame)
                 error('TrackData:addFrame:frameIndexNotScalar',...
                     'Expected the frame index to be a scalar number.');
                 
             else
-                if ~(frameIndex < obj.StartFrame || frameIndex > obj.EndFrame)
+                if ~(tFrame < obj.FirstFrame || tFrame > obj.LastFrame)
                     
                     error('TrackData:addFrame:frameIndexInvalid',...
                         'The frame index should be < %d or > %d.',...
-                        obj.StartFrame, obj.EndFrame);
+                        obj.FirstFrame, obj.LastFrame);
                 end
             end
             
@@ -131,58 +137,47 @@ classdef TrackData
             if ~isstruct(data)
                 error('TrackData:addFrame:dataNotStruct',...
                     'Expected data to be a struct.');
-            end
-            
-            %Add the frame index as a field to the data
-            data.FrameIndex = frameIndex;
+            end            
             
             %Add the frame to the track
-            if frameIndex > obj.EndFrame
+            if tFrame > obj.LastFrame
                 
-                if isinf(obj.StartFrame) && isinf(obj.EndFrame)
+                if isinf(obj.FirstFrame) && isinf(obj.LastFrame)
                     %If both start and end frames are infinite, then this
                     %is the first frame to be added
                     obj.Data = data;
-                    obj.Data(1).FrameIndex = frameIndex;
+                    obj.FrameIndex = tFrame;
                     
                 else
                     %Calculate the number of frames to add
-                    numFramesToAdd = frameIndex - obj.EndFrame;
-                    
-                    %Add missing frames (if any). The missing frames only
-                    %have the 'FrameIndex' property filled.
-                    for iAdditional = 1:(numFramesToAdd - 1)
-                        obj.Data(end + 1).FrameIndex = obj.EndFrame + 1;
-                    end
+                    numFramesToAdd = tFrame - obj.LastFrame;
                     
                     %Add the frame to the end of the array
-                    obj.Data(end + 1) = data;
+                    obj.Data(end + numFramesToAdd) = data;
+                    
+                    %Update the frame indices
+                    obj.FrameIndex = obj.FirstFrame:tFrame;
                     
                 end
                 
-            elseif frameIndex < obj.StartFrame
-                %Add the new frame to the start and move the old data to
-                %the end.
-                oldData = obj.Data;
-                obj.Data = data;
+            elseif tFrame < obj.FirstFrame
+                %Overwrite the Data property with new frame data, then move
+                %the old data to the end of the structure.
+                oldData = obj.Data;         %Save a copy of the old data
+                obj.Data = data;       %Overwrite the Data property
                 
-                %Calculate the element to move the old data to
-                dataInd = oldData(1).FrameIndex - obj.StartFrame + 1;
-                
+                %Move the old data to the end of the structure
+                dataInd = obj.FirstFrame - tFrame + 1;
                 obj.Data(dataInd:dataInd + numel(oldData) - 1) = oldData;
                 
                 %Update the frame indices
-                for ii = 1:dataInd
-                    obj.Data(ii).FrameIndex = frameIndex + (ii - 1);
-                end
-                
+                obj.FrameIndex = tFrame:obj.LastFrame;
                 
             end
             
-            
         end
         
-        function obj = deleteFrame(obj, frameIndex)
+        function obj = deleteFrame(obj, tFrame)
             %DELETEFRAME  Deletes the specified frame
             %
             %  T = T.DELETEFRAME(f, frameIndex) deletes the specified
@@ -206,29 +201,32 @@ classdef TrackData
             %  See also: TrackData.updateTrack
             
             %Validate the frame index input
-            if isnumeric(frameIndex)
-                if ~(all(frameIndex >= obj.StartFrame & frameIndex <= obj.EndFrame))
+            if isnumeric(tFrame)
+                if ~(all(tFrame >= obj.FirstFrame & tFrame <= obj.LastFrame))
                     error('TrackData:deleteFrame:frameIndexInvalid',...
                         'The frame index should be between %d and %d.',...
-                        obj.StartFrame, obj.EndFrame);
+                        obj.FirstFrame, obj.LastFrame);
                 end
                 
                 %Convert the frame index into the index for the data array
-                dataInd = frameIndex - obj.StartFrame + 1;
+                dataInd = tFrame - obj.FirstFrame + 1;
                 
-            elseif islogical(frameIndex)
-                if (numel(frameIndex) ~= obj.NumFrames) || (~isvector(frameIndex))
+            elseif islogical(tFrame)
+                if (numel(tFrame) ~= obj.NumFrames) || (~isvector(tFrame))
                     error('TrackData:deleteFrame:frameIndexInvalidSize',...
                         'If the frame index is a logical array, it must be a vector with the same number of elements as the number of frames.');
                 end
                 
                 %If it is a logical array, the usual deletion syntax should
                 %work
-                dataInd = frameIndex;
+                dataInd = tFrame;
                 
-            elseif ischar(frameIndex)
+                %Calculate the frame indices to delete
+                tFrame = obj.FirstFrame + find(dataInd) - 1;
                 
-                if any(strcmpi(frameIndex,{'last','end'}))
+            elseif ischar(tFrame)
+                
+                if any(strcmpi(tFrame,{'last','end'}))
                     dataInd = numel(obj.Data);
                 else
                     error('TrackData:deleteFrame:frameIndexCharInvalid',...
@@ -244,76 +242,20 @@ classdef TrackData
             obj.Data(dataInd) = [];
             
             %Renumber the frames
-            for ii = 2:numel(obj.Data)
-                obj.Data(ii).FrameIndex = obj.StartFrame + ii - 1;
+            for iF = 1:numel(tFrame)
+                if tFrame(iF) == obj.FirstFrame
+                    obj.FrameIndex(1) = [];
+                    
+                elseif tFrame(iF) == obj.LastFrame
+                    obj.FrameIndex(end) = [];
+                    
+                else
+                    obj.FrameIndex = obj.FirstFrame:obj.FirstFrame + numel(obj.Data) - 1;
+                end
             end
+
             
         end
                 
     end
 end
-
-
-
-
-
-
-
-
-%         function varargout = subsref(obj, s)
-%             %SUBSREF  Subscripted reference
-%             
-%             switch s(1).type
-%                 case '.'
-%                     if length(s) == 1
-%                         % Implement obj.PropertyName
-%                         
-%                         if ismember(s, obj.TrackDataProps)
-%                             varargout = obj.Data.(s);
-%                         else
-%                             varargout = {builtin('subsref',obj,s)};
-%                         end
-%                         
-%                     elseif length(s) == 2 && strcmp(s(2).type,'()')
-%                         % Implement obj.PropertyName(indices)
-%                         if ismember(s, obj.TrackDataProps)
-%                             varargout = obj.Data.(s);
-%                         else
-%                             varargout = {builtin('subsref',obj,s)};
-%                         end
-%                         
-%                     else
-%                         varargout = {builtin('subsref',obj,s)};
-%                     end
-%                 case '()'
-%                     if length(s) == 1
-%                         % Implement obj(indices)
-%                         ...
-%                     elseif length(s) == 2 && strcmp(s(2).type,'.')
-%                     % Implement obj(ind).PropertyName
-%                     ...
-%                     elseif length(s) == 3 && strcmp(s(2).type,'.') && strcmp(s(3).type,'()')
-%                     % Implement obj(indices).PropertyName(indices)
-%                     ...
-%                     else
-%                     % Use built-in for any other expression
-%                     varargout = {builtin('subsref',obj,s)};
-%                     end
-%                     %                 case '{}'
-%                     %                     if length(s) == 1
-%                     %                         % Implement obj{indices}
-%                     %                         ...
-%                     %                     elseif length(s) == 2 && strcmp(s(2).type,'.')
-%                     %                     % Implement obj{indices}.PropertyName
-%                     %                     ...
-%                     %                     else
-%                     %                     % Use built-in for any other expression
-%                     %                     varargout = {builtin('subsref',obj,s)};
-%                     %                     end
-%                 otherwise
-%                     error('Not a valid indexing expression')
-%             end
-%         end
-
-
-
