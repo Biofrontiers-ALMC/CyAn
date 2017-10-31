@@ -7,12 +7,13 @@ classdef TrackData
     %
     %  TrackData Methods:
     
-    properties %(Hidden)
-        Data
+    properties (Hidden)
+        
         FrameIndex
     end
     
     properties
+        Data
         MotherIdx = NaN;
         DaughterIdxs = NaN;
     end
