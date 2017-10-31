@@ -7,7 +7,7 @@ classdef TrackData
     %
     %  TrackData Methods:
     
-    properties (Hidden)
+    properties %(Hidden)
         Data
         FrameIndex
     end
@@ -257,5 +257,47 @@ classdef TrackData
             
         end
                 
+        function plot(obj)
+            
+            figure(1);
+            tt = obj.FirstFrame:obj.LastFrame;
+            yy = zeros(1,obj.NumFrames);
+            for ii = 1:obj.NumFrames
+                yy(ii) = [obj.Data(ii).channel1.TotalIntensity]./[obj.Data(ii).channel15.TotalIntensity];
+            end
+            plot(tt,yy)
+            title('Ratio')
+            hold on
+            
+            figure(2);
+            tt = obj.FirstFrame:obj.LastFrame;
+            yych1 = zeros(1,obj.NumFrames);
+            for ii = 1:obj.NumFrames
+                yych1(ii) = [obj.Data(ii).channel1.TotalIntensity]./[obj.Data(ii).Area];
+            end
+            plot(tt,yych1)
+            title('Channel 1')
+            hold on
+            
+            figure(3);
+            yych15 = zeros(1,obj.NumFrames);
+            for ii = 1:obj.NumFrames
+                yych15(ii) = [obj.Data(ii).channel15.TotalIntensity]./[obj.Data(ii).Area];
+            end
+            plot(tt,yych15)
+            title('Channel 15')
+            hold on
+            
+            figure;
+            yyaxis left
+            plot(tt,yych1)
+            ylabel('Channel 1')
+            yyaxis right
+            plot(tt,yych15)
+            ylabel('Channel 15')
+            
+            
+        end
+        
     end
 end
