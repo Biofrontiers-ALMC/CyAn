@@ -1,14 +1,15 @@
-classdef CyMain
+classdef CyMain < handle
     %CYMAIN  main Class (needs a better name)
     
     properties
         
         FrameRange = Inf;        
-        SeriesRange = 2;
+        SeriesRange = 1;
         OutputMovie = true;
         
         %Segmentation options
         ChannelToSegment = '!CStack';
+        CellMarkerChannel = '';
         ThresholdLevel = 0.05;
                      
         %Track linking parameters
@@ -113,8 +114,14 @@ classdef CyMain
                         imgToSegment = bfReader.getPlane(1, obj.ChannelToSegment, iT);
                     end
                     
-                    %Segment cells and get cell label
-                    cellLabels = CyMain.getCellLabels(imgToSegment);
+                    if ~isempty(obj.CellMarkerChannel)
+                        markerImg = bfReader.getPlane(1,obj.CellMarkerChannel,iT);
+                    
+                        %Segment cells and get cell label
+                        cellLabels = CyMain.getCellLabels(imgToSegment, markerImg);
+                    else
+                        cellLabels = CyMain.getCellLabels(imgToSegment);
+                    end
                     
                     %Get cell data
                     cellData = CyMain.getCellData(cellLabels, bfReader, iT);
@@ -123,12 +130,7 @@ classdef CyMain
                         warning('No cell data');
                         continue
                     end
-
-                    %Debugging
-                    if iT == 13
-                        keyboard                        
-                    end
-                                        
+                                       
                     %Link cells
                     if iT == frameRange(1)
                         %Set up the cell tracker
@@ -138,6 +140,14 @@ classdef CyMain
                         try
                             trackLinker = trackLinker.assignToTrack(iT, cellData);
                         catch
+                            
+                            saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far?\n');
+                            if saveData
+                                trackArray = trackLinker.getTrackArray; %#ok<NASGU>
+                                save(fullfile(outputDir, sprintf('%s_series%d.mat',fname, iSeries)), 'trackArray');
+                            end
+                            clear trackArray
+                            
                             keyboard
                         end
                     end
@@ -377,7 +387,7 @@ classdef CyMain
                 
             else
                 
-                %TODO: Add the ability to have a cell marker image
+                cellMarkerImg = varargin{1};
                 
             end
             
@@ -385,12 +395,13 @@ classdef CyMain
             %Normalize the cellImage
             cellImage = normalizeimg(cellImage);
             
-            mask = cellImage > 0.05;
-            
+            %Get an initial mask and clean it up
+            mask = cellImage > 0.05 * 65535;
+
             mask = imopen(mask,strel('disk',2));
             mask = imclearborder(mask);
             
-            %mask = activecontour(cellImage,mask);
+            mask = activecontour(cellImage,mask);
             
             mask = bwareaopen(mask,100);
             mask = imopen(mask,strel('disk',2));
@@ -400,6 +411,8 @@ classdef CyMain
 %             CyMain.showoverlay(CyMain.normalizeimg(cellImage),bwperim(mask),[0 1 0]);
 %             keyboard
 
+%---
+%---
             
             if isempty(cellMarkerImg)
                 
@@ -420,6 +433,16 @@ classdef CyMain
                 %Mark the negative regions (e.g. regions that are not the cell
                 %and each cell region)
                 %markedImage = imimposemin(img, ~colonyMask | fgmarker);
+            
+                cellMarkerImgFilt = medfilt2(cellMarkerImg,[10 10]);
+                cellMarkerMask = imextendedmax(cellMarkerImgFilt, 50);
+                
+                %Invert the cell marker image so that the centers are dark
+                img = imcomplement(cellMarkerImg);
+                
+                %Mark the negative regions (e.g. regions that are not the cell
+                %and each cell region)
+                imgToWatershed = imimposemin(img, ~mask | cellMarkerMask);
                 
             end
             
