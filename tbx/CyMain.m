@@ -657,6 +657,14 @@ classdef CyMain < handle
                 for iCell = 1:numel(cellData)
                     cellData(iCell).(sprintf('channel%d',iC)).TotalIntensity = ...
                         sum(currImage(cellData(iCell).PixelIdxList));
+                    
+                    cellData(iCell).(sprintf('channel%d',iC)).MaxIntensity = ...
+                        max(currImage(cellData(iCell).PixelIdxList));
+                    
+                    cellData(iCell).(sprintf('channel%d',iC)).MinIntensity = ...
+                        min(currImage(cellData(iCell).PixelIdxList));
+                    
+                    
                 end
             end
             
