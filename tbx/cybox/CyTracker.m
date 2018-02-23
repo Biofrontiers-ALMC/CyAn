@@ -1,8 +1,13 @@
 classdef CyTracker < handle
     %CYTRACKER  Tracking and segmentation for Cyanobacteria cells
     %
+    %  CYTRACKER is an object for setting up tracking and segmentation for
+    %  cyanobacterial cells.
     %
-    %  Copyright 2017 CU Boulder and the Cameron Lab
+    %  This object requires the BioformatsImage toolbox and the LAP tracker
+    %  to be installed.    %
+    %
+    %  Copyright 2018 CU Boulder and the Cameron Lab
     %  Author: Jian Wei Tay
     
     properties
@@ -964,6 +969,7 @@ classdef CyTracker < handle
                 end
             end
         end
+        
     end
     
     methods (Access = private)
