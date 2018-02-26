@@ -5,7 +5,10 @@ classdef CyTracker < handle
     %  cyanobacterial cells.
     %
     %  This object requires the BioformatsImage toolbox and the LAP tracker
-    %  to be installed.    %
+    %  to be installed.
+    %
+    %  Please see the wiki for usage instructions: 
+    %  https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home
     %
     %  Copyright 2018 CU Boulder and the Cameron Lab
     %  Author: Jian Wei Tay
@@ -25,10 +28,13 @@ classdef CyTracker < handle
                 
         %Segmentation options
         ChannelToSegment = '';
+        SegMode = 'Brightfield';
         ThresholdLevel = 1.4;
         
+        %Spot detection options
         SpotChannel = '';
         SpotThreshold = 2.5;
+        SpotBgSubtract = false;
         
         %Track linking parameters
         LinkedBy = 'PixelIdxList';
@@ -403,7 +409,9 @@ classdef CyTracker < handle
                     for iT = frameRange
                         
                         %Segment the cells
-                        currCellMask = PolyploidyTracker.getCellLabels(bfr.getPlane(1, obj.ChannelToSegment, iT), obj.ThresholdLevel);
+                        currCellMask = CyTracker.getCellLabels(...
+                            bfr.getPlane(1, obj.ChannelToSegment, iT), ...
+                            obj.ThresholdLevel, obj.SegMode);
                         
                         %Normalize the mask
                         outputMask = currCellMask > 0;
@@ -421,8 +429,8 @@ classdef CyTracker < handle
                             imwrite(outputMask, maskOutputFN, 'compression', 'none');
                             imwrite(outputImg, imageOutputFN, 'compression', 'none');
                         else
-                            imwrite(outputMask, maskOutputFN,'writeMode','append', 'compression', 'none');
-                            imwrite(outputImg, imageOutputFN, 'compression', 'none', 'writeMode','append');
+                            imwrite(outputMask, maskOutputFN, 'writeMode', 'append', 'compression', 'none');
+                            imwrite(outputImg, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
                         end
                         
                         
@@ -484,9 +492,9 @@ classdef CyTracker < handle
                     %Segment the cells
                     imgToSegment = bfReader.getPlane(1, opts.ChannelToSegment, iT);
                     
-                    if isempty(opts.InputMaskDir)
+                    if ~opts.UseMasks
                         %Segment the cells
-                        cellLabels = CyTracker.getCellLabels(imgToSegment, opts.ThresholdLevel);
+                        cellLabels = CyTracker.getCellLabels(imgToSegment, opts.ThresholdLevel, opts.SegMode);
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
@@ -496,7 +504,7 @@ classdef CyTracker < handle
                     %Run spot detection if the SpotChannel property is set
                     if ~isempty(opts.SpotChannel)
                         dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
-                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold);
+                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract);
                     else 
                         dotLabels = [];
                     end
@@ -630,7 +638,7 @@ classdef CyTracker < handle
             
         end
         
-        function cellLabels = getCellLabels(cellImage, thFactor)
+        function cellLabels = getCellLabels(cellImage, thFactor, segMode)
             %GETCELLLABELS  Segment and label individual cells
             %
             %  L = CyTracker.GETCELLLABELS(I) will segment the cells in image
@@ -641,57 +649,92 @@ classdef CyTracker < handle
             %  cells. M should be a fluroescent image (e.g. YFP, GFP) that
             %  fully fills the cells.
             
-            %Normalize the cellImage
-            cellImage = CyTracker.normalizeimg(cellImage);
-            cellImage = imsharpen(cellImage,'Amount', 2);           
+            switch lower(segMode)
+                
+                case 'brightfield'
+
+                    [nCnts, xBins] = histcounts(cellImage(:));
+                    xBins = diff(xBins) + xBins(1:end-1);
+                    
+                    gf = fit(xBins', nCnts', 'gauss1');
+                    
+                    thFactor = 3;
+                    thLvl = gf.b1 + thFactor * gf.c1;
+                    
+                    mask = cellImage > thLvl;
+                    mask = imfill(mask, 'holes');
+                    mask = imopen(mask, strel('disk', 3));
+                    mask = imclose(mask, strel('disk', 3));
+                    
+                    mask = imerode(mask, ones(1));                    
+                    
+                    dd = -bwdist(~mask);
+                    dd(~mask) = -Inf;
+                    dd = imhmin(dd, 4);
+                    
+                    LL = watershed(dd);
+                    
+                    mask(LL == 0) = 0;
+                    
+                    mask = imclearborder(mask);
+                    
+                    cellLabels = bwmorph(mask,'thicken', 8);
+                
+                case 'fluorescence'
             
-            %Get a threshold
-            [nCnts, binEdges] = histcounts(cellImage(:),150);
-            binCenters = diff(binEdges) + binEdges(1:end-1);
-            
-            %Determine the background intensity level
-            [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
-            
-            gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
-            
-            thLvl = gf.b1 + thFactor * gf.c1;            
-            mask = cellImage > thLvl;
-            
-            mask = imopen(mask,strel('disk',2));
-            mask = imclearborder(mask);
-            
-            mask = activecontour(cellImage,mask);
-            
-            mask = bwareaopen(mask,100);
-            mask = imopen(mask,strel('disk',2));
-            
-            mask = imfill(mask,'holes');
-                        
-            %Try to mark the image
-            markerImg = medfilt2(cellImage,[10 10]);
-            markerImg = imregionalmax(markerImg,8);
-            markerImg(~mask) = 0;
-            markerImg = imdilate(markerImg,strel('disk', 6));
-            markerImg = imerode(markerImg,strel('disk', 3));
-            
-            %Remove regions which are too dark
-            rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
-            markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
-            
-            idxToDelete = 1:numel(rptemp);
-            idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
-            
-            for ii = idxToDelete
-                markerImg(rptemp(ii).PixelIdxList) = 0;                
+                    %Normalize the cellImage
+                    cellImage = CyTracker.normalizeimg(cellImage);
+                    cellImage = imsharpen(cellImage,'Amount', 2);
+                    
+                    %Get a threshold
+                    [nCnts, binEdges] = histcounts(cellImage(:),150);
+                    binCenters = diff(binEdges) + binEdges(1:end-1);
+                    
+                    %Determine the background intensity level
+                    [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
+                    
+                    gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
+                    
+                    thLvl = gf.b1 + thFactor * gf.c1;
+                    mask = cellImage > thLvl;
+                    
+                    mask = imopen(mask,strel('disk',2));
+                    mask = imclearborder(mask);
+                    
+                    mask = activecontour(cellImage,mask);
+                    
+                    mask = bwareaopen(mask,100);
+                    mask = imopen(mask,strel('disk',2));
+                    
+                    mask = imfill(mask,'holes');
+                    
+                    %Try to mark the image
+                    markerImg = medfilt2(cellImage,[10 10]);
+                    markerImg = imregionalmax(markerImg,8);
+                    markerImg(~mask) = 0;
+                    markerImg = imdilate(markerImg,strel('disk', 6));
+                    markerImg = imerode(markerImg,strel('disk', 3));
+                    
+                    %Remove regions which are too dark
+                    rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
+                    markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
+                    
+                    idxToDelete = 1:numel(rptemp);
+                    idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
+                    
+                    for ii = idxToDelete
+                        markerImg(rptemp(ii).PixelIdxList) = 0;
+                    end
+                    
+                    dd = imcomplement(medfilt2(cellImage,[4 4]));
+                    dd = imimposemin(dd, ~mask | markerImg);
+                    
+                    cellLabels = watershed(dd);
+                    cellLabels = imclearborder(cellLabels);
+                    
+                    cellLabels = imopen(cellLabels, strel('disk',6));
             end
-                        
-            dd = imcomplement(medfilt2(cellImage,[4 4]));
-            dd = imimposemin(dd, ~mask | markerImg);
-                        
-            cellLabels = watershed(dd);
-            cellLabels = imclearborder(cellLabels);
             
-            cellLabels = imopen(cellLabels, strel('disk',6));
             
             if ~any(cellLabels(:))
                 warning('No cells detected');              
@@ -699,20 +742,31 @@ classdef CyTracker < handle
             
         end
         
-        function dotLabels = segmentSpots(imgIn, cellLabels, spotThreshold)
+        function dotLabels = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub)
             %SEGMENTSPOTS  Finds spots
             
             %Convert the carboxysome image to double
-            imgIn = double(imgIn);
+            imgInFilt = double(imgIn);
+            
+            if bgSub
+                %Perform a tophat subtraction
+                bgImg = imopen(imgInFilt, strel('disk', 7));
+                imgInFilt = imgInFilt - bgImg;
+            end
             
             %Apply a median filter to smooth the image
-            imgIn = medfilt2(imgIn,[2 2]);
+            imgInFilt = medfilt2(imgInFilt,[2 2]);
+            
+            if islogical(cellLabels)
+                cellLabels = bwlabel(cellLabels);                
+            end
             
             %Find local maxima in the image using dilation
-            dilCbxImage = imdilate(imgIn,strel('disk',2));
-            dotMask = dilCbxImage == imgIn;
+            dilCbxImage = imdilate(imgInFilt,strel('disk',2));
+            dotMask = dilCbxImage == imgInFilt;
             
-            dotLabels = false(size(imgIn));
+            dotLabels = false(size(imgInFilt));
+            
             %Refine the dots by cell intensity
             for iCell = 1:max(cellLabels(:))
                 
@@ -725,9 +779,14 @@ classdef CyTracker < handle
                 
                 dotLabels = dotLabels | currDotMask;
             end
+%             
+%             %Refine the dots by global intensity
+%             meanDotInt = mean(imgIn(dotLabels));
+%             dotLabels(imgIn(dotLabels) < 1.5 * meanDotInt) = 0;
+            
             
             %             keyboard
-            %dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
+            dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
             
         end
         
