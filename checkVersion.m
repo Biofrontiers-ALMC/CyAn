@@ -10,6 +10,7 @@ for ii = 1:numel(ls)
     end
 end
 
+%Read the file into a variable
 fid = fopen(cPath,'r');
 
 if fid == -1
@@ -17,16 +18,15 @@ if fid == -1
     return    
 end
 
-%Get the second line
-currLine = fgetl(fid);
-currLine = fgetl(fid);
+contents = textscan(fid, '%s', 'delimiter', '\n');
+fclose(fid);
+
+%--- Check for version number ---%
 
 %If the line is NOT a version number, add it in
-isVersion = contains(lower(currLine),'version');
+hasVersion = contains(lower(contents{1}{2}),'version');
 
-keyboard
-
-if isVersion
+if hasVersion
     
     %Check version number was incremented by comparing the date
     
@@ -42,23 +42,36 @@ else
     
 end
 
-%Check that the next line contains the git hash
-currLine = fgetl(fid);
+%--- Check for githash ---%
 
-%If the line is NOT a version number, add it in
-isGithash = contains(lower(currLine),'git hash');
+% %Check that there are no uncommitted changes
+% [~, cmdOut] = system('git status -s');
+% 
+% if ~isempty(cmdOut)
+%     error('There are uncommitted changes.');
+% end
 
-if isGithash
-    
-    %Check that there are no uncommitted changes
-    [~, cmdOut] = system('git status -s');
-    
-    if ~isempty(cmdOut)
-        error('There are uncommitted changes.');
-    end
-    
+%Get the latest git hash
+[~, lastHash] = system('git log --pretty=format:''%H'' -n 1');
+lastHash = regexprep(lastHash, '[^a-z0-9]*',''); %Strip apostrophes
+
+%Check that there are no unpushed data to the remotes
+system('git fetch');
+[~, cmdOut] = system(['git branch -r --contains ' lastHash]);
+
+if ~contains(cmdOut,'master')
+    error('The changes have not been pushed to the master branch');
+end
+
+%Look for git hash in code
+hasGithash = contains(lower(contents{1}{3}),'git hash');
+
+if hasGithash
+        
     %Check that the value matches the latest git hash
-    
+    if ~contains(currLine, lastHash)
+        
+    end
     
     %If not, offer to increment build number
     
@@ -66,11 +79,25 @@ if isGithash
     
 else
     
+    gitHashLine = ['% Git hash ', lastHash];
+    
+    %Write the line in
+    contents{1} = [contents{1}(1:2); {gitHashLine}; contents{1}(3:end)];
+        
 end
 
+%Write the output
+fid = fopen(cPath,'w');
+
+if fid == -1
+    error('Error opening file %s', cPath);
+    return    
+end
+
+for ii = 1:numel(contents{1})
+    fprintf(fid, '%s\n', contents{1}{ii});
+end
 
 fclose(fid);
-
-
 
 end
