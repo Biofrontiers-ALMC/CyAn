@@ -24,7 +24,7 @@ classdef CyTracker < handle
         InputMaskDir = 0;
         
         %Export options
-        ExportMasks = false;
+%         ExportMasks = false;
                 
         %Segmentation options
         ChannelToSegment = '';
@@ -111,7 +111,7 @@ classdef CyTracker < handle
                 end
                
                 %Prompt for mask directory
-                if obj.UseMasks && isempty(obj.InputMaskDir)
+                if obj.UseMasks && isequal(obj.InputMaskDir, 0)
                     obj.InputMaskDir = uigetdir(fileparts(fname{1}), 'Select mask directory');
                     
                     if isequal(obj.InputMaskDir,0)
@@ -786,7 +786,7 @@ classdef CyTracker < handle
             
             
             %             keyboard
-            dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
+            %dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
             
         end
         
