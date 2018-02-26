@@ -12,7 +12,7 @@ classdef CyTracker < handle
     %
     %  Copyright 2018 CU Boulder and the Cameron Lab
     %  Author: Jian Wei Tay
-    
+        
     properties
         
         %Image options
