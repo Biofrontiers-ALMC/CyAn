@@ -31,6 +31,10 @@ classdef CyTracker < handle
         SegMode = 'Brightfield';
         ThresholdLevel = 1.4;
         
+        MaxCellMinDepth = 2;
+        MinCellArea = 500;
+        
+        
         %Spot detection options
         SpotChannel = '';
         SpotThreshold = 2.5;
@@ -411,7 +415,8 @@ classdef CyTracker < handle
                         %Segment the cells
                         currCellMask = CyTracker.getCellLabels(...
                             bfr.getPlane(1, obj.ChannelToSegment, iT), ...
-                            obj.ThresholdLevel, obj.SegMode);
+                            obj.ThresholdLevel, obj.SegMode, ...
+                            opts.MaxCellMinDepth, opts.MinCellArea);
                         
                         %Normalize the mask
                         outputMask = currCellMask > 0;
@@ -494,7 +499,9 @@ classdef CyTracker < handle
                     
                     if ~opts.UseMasks
                         %Segment the cells
-                        cellLabels = CyTracker.getCellLabels(imgToSegment, opts.ThresholdLevel, opts.SegMode);
+                        cellLabels = CyTracker.getCellLabels(imgToSegment, ...
+                            opts.ThresholdLevel, opts.SegMode,...
+                            opts.MaxCellMinDepth, opts.MinCellArea);
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
@@ -638,7 +645,7 @@ classdef CyTracker < handle
             
         end
         
-        function cellLabels = getCellLabels(cellImage, thFactor, segMode)
+        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, minCellArea)
             %GETCELLLABELS  Segment and label individual cells
             %
             %  L = CyTracker.GETCELLLABELS(I) will segment the cells in image
@@ -652,33 +659,53 @@ classdef CyTracker < handle
             switch lower(segMode)
                 
                 case 'brightfield'
-
-                    [nCnts, xBins] = histcounts(cellImage(:));
+                    
+                    %Pre-process the brightfield image: median filter and
+                    %background subtraction
+                    cellImageTemp = medfilt2(cellImage,[3 3]);
+                    
+                    bgImage = imopen(cellImageTemp, strel('disk', 20));
+                    cellImageTemp = cellImageTemp - bgImage;
+                    
+                    %Fit the background
+                    [nCnts, xBins] = histcounts(cellImageTemp(:));
                     xBins = diff(xBins) + xBins(1:end-1);
                     
                     gf = fit(xBins', nCnts', 'gauss1');
-                    
-                    thFactor = 3;
+                                        
+                    %Compute the threshold level
                     thLvl = gf.b1 + thFactor * gf.c1;
                     
-                    mask = cellImage > thLvl;
+                    %Compute initial cell mask
+                    mask = cellImageTemp > thLvl;
+                    
                     mask = imfill(mask, 'holes');
                     mask = imopen(mask, strel('disk', 3));
                     mask = imclose(mask, strel('disk', 3));
                     
-                    mask = imerode(mask, ones(1));                    
+                    mask = imerode(mask, ones(1));
                     
+                    %Separate the cell clumps using watershedding
                     dd = -bwdist(~mask);
                     dd(~mask) = -Inf;
-                    dd = imhmin(dd, 4);
+                    dd = imhmin(dd, maxCellminDepth);
                     
                     LL = watershed(dd);
-                    
                     mask(LL == 0) = 0;
                     
+                    %Tidy up
                     mask = imclearborder(mask);
+                    mask = bwmorph(mask,'thicken', 8);
+                    mask = bwareaopen(mask, minCellArea);
                     
-                    cellLabels = bwmorph(mask,'thicken', 8);
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
+                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                    
+%                     %Converting from labels to mask
+%                     refMask = refLabels > 0;
+%                     refMask(boundarymask(refLabels)) = 0;
+                    
                 
                 case 'fluorescence'
             
@@ -1027,6 +1054,47 @@ classdef CyTracker < handle
                     
                 end
             end
+        end
+        
+        function imgOut = drawCapsule(imgSize, props)
+            %DRAWCAPSULE  Draws a capsule at the specified location
+            %
+            %  L = CyTracker.DRAWCAPSULE(I, RP) will draw capsules given
+            %  the Centroid, MajorAxisLength, MinorAxisLength, and
+            %  Orientation in RP. RP should be a struct, e.g. generated
+            %  using REGIONPROPS.
+            
+            if numel(imgSize) ~= 2
+                error('CyTracker:drawCapsule:InvalidImageSize',...
+                    'Image size should be a 1x2 vector.');                
+            end
+            
+            imgOut = zeros(imgSize);
+            
+            xx = 1:size(imgOut, 2);
+            yy = 1:size(imgOut, 1);
+            
+            [xx, yy] = meshgrid(xx,yy);
+            
+            for ii = 1:numel(props)
+                
+                center = props(ii).Centroid;
+                theta = props(ii).Orientation/180 * pi;
+                cellLen = props(ii).MajorAxisLength;
+                cellWidth = props(ii).MinorAxisLength;
+                
+                rotX = (xx - center(1)) * cos(theta) - (yy - center(2)) * sin(theta);
+                rotY = (xx - center(1)) * sin(theta) + (yy - center(2)) * cos(theta);
+                
+                %Plot the rectangle
+                imgOut(abs(rotX) < (cellLen/2 - cellWidth/2) & abs(rotY) < cellWidth/2) = ii;
+                
+                % %Plot circles on either end
+                imgOut(((rotX-(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                imgOut(((rotX+(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                
+            end
+            
         end
         
     end
