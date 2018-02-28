@@ -443,7 +443,6 @@ classdef CyTracker < handle
                 end
             end
             
-            
         end
         
     end
@@ -609,7 +608,7 @@ classdef CyTracker < handle
                 %Add timestamp information
                 [ts, tsunit] = bfReader.getTimestamps(1,1);
 
-                trackArray = trackArray.setTimestampInfo(ts,tsunit); %#ok<NASGU>
+                trackArray = trackArray.setTimestampInfo(ts(frameRange),tsunit); %#ok<NASGU>
                 
                 save([saveFN, '.mat'], 'trackArray');
                 clear trackArray
