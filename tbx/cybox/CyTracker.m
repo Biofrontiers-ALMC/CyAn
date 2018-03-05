@@ -361,7 +361,7 @@ classdef CyTracker < handle
                 
             else
                 if exist(varargin{1},'file')
-                    filename = varargin{1};
+                    filename = {varargin{1}};
                 else
                     error('PolyploidyTracker:processFiles:FileDoesNotExist',...
                         'Could not find file %s.',varargin{1});
@@ -416,7 +416,7 @@ classdef CyTracker < handle
                         currCellMask = CyTracker.getCellLabels(...
                             bfr.getPlane(1, obj.ChannelToSegment, iT), ...
                             obj.ThresholdLevel, obj.SegMode, ...
-                            opts.MaxCellMinDepth, opts.MinCellArea);
+                            obj.MaxCellMinDepth, obj.MinCellArea);
                         
                         %Normalize the mask
                         outputMask = currCellMask > 0;

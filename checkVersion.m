@@ -1,4 +1,6 @@
 function checkVersion
+%CHECKVERSION  Checks that the version number in the toolbox has been
+%updated
 
 %Get tbx folder name
 ls = dir('tbx');
