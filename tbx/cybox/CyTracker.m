@@ -34,7 +34,6 @@ classdef CyTracker < handle
         MaxCellMinDepth = 2;
         MinCellArea = 500;
         
-        
         %Spot detection options
         SpotChannel = '';
         SpotThreshold = 2.5;
@@ -420,6 +419,7 @@ classdef CyTracker < handle
                         
                         %Normalize the mask
                         outputMask = currCellMask > 0;
+                        outputMask(boundarymask(currCellMask)) = 0;
                         %outputMask = uint8(outputMask) .* 255;
                         
                         %Normalize the image and convert to uint8
