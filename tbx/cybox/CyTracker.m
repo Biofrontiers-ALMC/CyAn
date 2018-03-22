@@ -705,7 +705,6 @@ classdef CyTracker < handle
 %                     refMask = refLabels > 0;
 %                     refMask(boundarymask(refLabels)) = 0;
                     
-                
                 case 'fluorescence'
             
                     %Normalize the cellImage
@@ -759,6 +758,140 @@ classdef CyTracker < handle
                     cellLabels = imclearborder(cellLabels);
                     
                     cellLabels = imopen(cellLabels, strel('disk',6));
+                    
+                case 'experimental'
+                    
+%                     imshow(cellImage,[])
+%                     
+%                                         
+                    
+                    %Pre-process the brightfield image: median filter and
+                    %background subtraction
+                    bgImage = imopen(cellImage, strel('disk', 20));
+                    cellImageTemp = cellImage - bgImage;
+                    cellImageTemp = imgaussfilt(cellImageTemp,5);
+                   
+                    imshow(cellImageTemp,[])
+                    keyboard
+                    
+                    %Fit the background
+                    [nCnts, xBins] = histcounts(cellImageTemp(:));
+                    xBins = diff(xBins) + xBins(1:end-1);
+                    
+                    gf = fit(xBins', nCnts', 'gauss1');
+                    
+                    %Compute the threshold level
+                    thLvl = gf.b1 + thFactor * gf.c1;
+                    
+                    %Compute initial cell mask
+                    mask = cellImageTemp > thLvl;
+%                     imshow(mask)
+
+                   
+%                     mask = imfill(mask, 'holes');
+                    mask = imopen(mask, strel('disk', 3));
+                    mask = imclose(mask, strel('disk', 3));
+                    
+                    mask = imerode(mask, ones(1));
+                    
+                    %Separate the cell clumps using watershedding
+                    dd = -bwdist(~mask);
+                    dd(~mask) = -Inf;
+                    dd = imhmin(dd, maxCellminDepth);
+                    
+                    LL = watershed(dd);
+                    mask(LL == 0) = 0;
+                    
+                    %Tidy up
+                    mask = imclearborder(mask);
+                    
+                    mask = bwareaopen(mask, 100);
+                    
+                    mask = bwmorph(mask,'thicken', 8);
+                    
+                    showoverlay(cellImage, mask)
+                    keyboard
+                    
+                    %Identify cells which are too large and try to split
+                    %them
+                    rpCells = regionprops(mask, {'Area','PixelIdxList'});
+                    
+                    %Average area
+                    medianArea = median([rpCells.Area]);                                        
+                    MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
+                    
+                    outlierCells = find([rpCells.Area] > (medianArea + 4 * MAD));
+                    
+                    for iCell = outlierCells
+                        
+                        currMask = false(size(mask));
+                        currMask(rpCells(iCell).PixelIdxList) = true;
+                        
+%                         showoverlay(cellImage, currMask)
+%                         keyboard
+                        
+%                         %Fit the background
+%                         [nCnts, xBins] = histcounts(cellImageTemp(currMask));
+%                         xBins = diff(xBins) + xBins(1:end-1);
+%                         
+%                         gf = fit(xBins', nCnts', 'gauss2');
+%                         
+%                         plot(gf, xBins, nCnts)
+%                         
+%                         
+%                         %Compute the threshold level as the minimum between
+%                         %the two peaks
+%                         [~, startLoc] = min(abs(xBins - gf.b1));
+%                         [~, endLoc] = min(abs(xBins - gf.b2));
+%                         
+%                         [~, minLoc] = min(nCnts(startLoc:endLoc));
+%                         
+%                         thLvl = xBins(minLoc + startLoc);
+%                         keyboard
+                        
+                        thLvl = prctile(cellImage(currMask), 40);
+                        
+                        newMask = cellImage > thLvl;
+                        newMask(~currMask) = 0;
+                        
+%                         showoverlay(cellImage, newMask)
+%                         keyboard
+                        
+                        newMask = imopen(newMask, strel('disk', 3));
+                        newMask = imclose(newMask, strel('disk', 3));
+                        
+                        newMask = imerode(newMask, ones(1));
+                        
+                        dd = -bwdist(~newMask);
+                        dd(~newMask) = -Inf;
+                        dd = imhmin(dd, maxCellminDepth);
+                        
+                        LL = watershed(dd);
+                        newMask(LL == 0) = 0;
+                        
+                        newMask = bwareaopen(newMask, minCellArea);
+                        newMask = bwmorph(newMask,'thicken', 8);
+%                         showoverlay(cellImage, newMask);
+%                         keyboard
+                        
+                        %Replace the old masks
+                        mask(currMask) = 0;
+                        mask(currMask) = newMask(currMask);
+                        
+                    end
+                   
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
+                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                                        
+                    showoverlay(cellImage, cellLabels)
+                    keyboard
+                    
+
+                    
+                    
+                    
+                    
             end
             
             
