@@ -771,8 +771,8 @@ classdef CyTracker < handle
                     cellImageTemp = cellImage - bgImage;
                     cellImageTemp = imgaussfilt(cellImageTemp,5);
                    
-                    imshow(cellImageTemp,[])
-                    keyboard
+%                     imshow(cellImageTemp,[])
+%                     keyboard
                     
                     %Fit the background
                     [nCnts, xBins] = histcounts(cellImageTemp(:));
@@ -809,8 +809,8 @@ classdef CyTracker < handle
                     
                     mask = bwmorph(mask,'thicken', 8);
                     
-                    showoverlay(cellImage, mask)
-                    keyboard
+%                     showoverlay(cellImage, mask)
+%                     keyboard
                     
                     %Identify cells which are too large and try to split
                     %them
@@ -884,8 +884,8 @@ classdef CyTracker < handle
                     rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
                     cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
                                         
-                    showoverlay(cellImage, cellLabels)
-                    keyboard
+%                     showoverlay(cellImage, cellLabels)
+%                     keyboard
                     
 
                     
