@@ -362,14 +362,31 @@ classdef CyTracker < handle
                 if exist(varargin{1},'file')
                     filename = {varargin{1}};
                 else
-                    error('PolyploidyTracker:processFiles:FileDoesNotExist',...
+                    error('CyTracker:processFiles:FileDoesNotExist',...
                         'Could not find file %s.',varargin{1});
                 end
+                varargin(1) = [];
+            end
+                        
+            exportRaw = false;
+            
+            while ~isempty(varargin)                
+                
+                if strcmpi(varargin{1}, 'raw')
+                    exportRaw = true;
+                else
+                    outputDir = varargin{2};
+                    if ~exist(outputDir,'dir')
+                        mkdir(outputDir)
+                    end
+                end
+                
+                varargin(1) = [];
+            
             end
             
             %Prompt user for a directory to save output files to
-            if numel(varargin) < 2
-                
+            if ~exist('outputDir', 'var')
                 startPath = fileparts(filename{1});
                 
                 outputDir = uigetdir(startPath, 'Select output directory');
@@ -378,13 +395,8 @@ classdef CyTracker < handle
                     %Processing cancelled
                     return;
                 end
-                
-            else
-                outputDir = varargin{2};
-                if ~exist(outputDir,'dir')
-                    mkdir(outputDir)
-                end
             end
+            
             
             for iFile = 1:numel(filename)                
                 
@@ -415,12 +427,17 @@ classdef CyTracker < handle
                         currCellMask = CyTracker.getCellLabels(...
                             bfr.getPlane(1, obj.ChannelToSegment, iT), ...
                             obj.ThresholdLevel, obj.SegMode, ...
-                            obj.MaxCellMinDepth, obj.MinCellArea);
+                            obj.MaxCellMinDepth, obj.MinCellArea, exportRaw);
                         
                         %Normalize the mask
                         outputMask = currCellMask > 0;
                         outputMask(boundarymask(currCellMask)) = 0;
                         %outputMask = uint8(outputMask) .* 255;
+                        
+                        if exportRaw
+                            outputMask = bwmorph(outputMask,'skel', Inf);
+                            
+                        end
                         
                         %Normalize the image and convert to uint8
                         imgToExport = bfr.getPlane(1, 'Cy5', iT);
@@ -644,7 +661,7 @@ classdef CyTracker < handle
             
         end
         
-        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, minCellArea)
+        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, minCellArea, varargin)
             %GETCELLLABELS  Segment and label individual cells
             %
             %  L = CyTracker.GETCELLLABELS(I) will segment the cells in image
@@ -654,6 +671,12 @@ classdef CyTracker < handle
             %  L = CyTracker.GETCELLLABELS(I, M) will use image M to mark
             %  cells. M should be a fluroescent image (e.g. YFP, GFP) that
             %  fully fills the cells.
+            
+            exportRaw = false;
+            if ~isempty(varargin)
+                exportRaw = varargin{1};                
+            end
+            
             
             switch lower(segMode)
                 
@@ -761,10 +784,7 @@ classdef CyTracker < handle
                     
                 case 'experimental'
                     
-%                     imshow(cellImage,[])
-%                     
-%                                         
-                    
+                   
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
                     bgImage = imopen(cellImage, strel('disk', 20));
@@ -820,42 +840,23 @@ classdef CyTracker < handle
                     medianArea = median([rpCells.Area]);                                        
                     MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
                     
-                    outlierCells = find([rpCells.Area] > (medianArea + 4 * MAD));
+                    outlierCells = find([rpCells.Area] > (medianArea + 2 * MAD));
                     
                     for iCell = outlierCells
                         
                         currMask = false(size(mask));
                         currMask(rpCells(iCell).PixelIdxList) = true;
                         
-%                         showoverlay(cellImage, currMask)
-%                         keyboard
-                        
-%                         %Fit the background
-%                         [nCnts, xBins] = histcounts(cellImageTemp(currMask));
-%                         xBins = diff(xBins) + xBins(1:end-1);
-%                         
-%                         gf = fit(xBins', nCnts', 'gauss2');
-%                         
-%                         plot(gf, xBins, nCnts)
-%                         
-%                         
-%                         %Compute the threshold level as the minimum between
-%                         %the two peaks
-%                         [~, startLoc] = min(abs(xBins - gf.b1));
-%                         [~, endLoc] = min(abs(xBins - gf.b2));
-%                         
-%                         [~, minLoc] = min(nCnts(startLoc:endLoc));
-%                         
-%                         thLvl = xBins(minLoc + startLoc);
-%                         keyboard
+                        %                         showoverlay(cellImage, currMask)
+                        %                         keyboard
                         
                         thLvl = prctile(cellImage(currMask), 40);
                         
                         newMask = cellImage > thLvl;
                         newMask(~currMask) = 0;
                         
-%                         showoverlay(cellImage, newMask)
-%                         keyboard
+                        %                         showoverlay(cellImage, newMask)
+                        %                         keyboard
                         
                         newMask = imopen(newMask, strel('disk', 3));
                         newMask = imclose(newMask, strel('disk', 3));
@@ -871,26 +872,32 @@ classdef CyTracker < handle
                         
                         newMask = bwareaopen(newMask, minCellArea);
                         newMask = bwmorph(newMask,'thicken', 8);
-%                         showoverlay(cellImage, newMask);
-%                         keyboard
+                        %                         showoverlay(cellImage, newMask);
+                        %                         keyboard
                         
                         %Replace the old masks
                         mask(currMask) = 0;
                         mask(currMask) = newMask(currMask);
                         
                     end
-                   
-                    %Redraw the masks using cylinders
-                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
-                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
-                                        
+                    
+                    %                     %Looks for cells which are too small and join them
+                    %                     smallCells = find([rpCells.Area] < (medianArea + 4 * MAD));
+                    %                     for iCell = smallCells
+                    %
+                    %
+                    %
+                    %                     end
+                    
+                    if ~exportRaw
+                        %Redraw the masks using cylinders
+                        rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
+                        cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                    else
+                        cellLabels = mask;
+                    end
 %                     showoverlay(cellImage, cellLabels)
 %                     keyboard
-                    
-
-                    
-                    
-                    
                     
             end
             
