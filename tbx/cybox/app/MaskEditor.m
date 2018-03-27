@@ -1,6 +1,6 @@
 classdef MaskEditor < handle
     
-    properties
+    properties (Hidden)
         
         handles_
         
@@ -8,11 +8,13 @@ classdef MaskEditor < handle
         baseImgReader
         
         baseImgData
+        baseImgHandle
         
         maskPath
         maskData
+        maskHandle
         
-        isDrawing = false;
+        lastPt
         
     end
     
@@ -23,8 +25,13 @@ classdef MaskEditor < handle
             obj.handles_ = guihandles(editorFig);
             
             set(obj.handles_.mnuLoadImage, 'callback', @(src, event) loadImage(obj, src, event));
+            
             set(obj.handles_.mnuLoadMask, 'callback', @(src, event) loadMask(obj, src, event));
-                        
+            set(obj.handles_.mnuSaveAsMask, 'callback', @(src, event) saveMask(obj, src, event));
+            set(obj.handles_.mnuOverwriteMask, 'callback', @(src, event) saveMask(obj, src, event));
+            
+            set(obj.handles_.mnuDrawCapsules, 'callback', @(src, event) drawCapsules(obj, src, event));
+            
             set(obj.handles_.sldZPos,  'callback', @(src,event) updateSlider(obj, src, event));
             set(obj.handles_.sldChannel,  'callback', @(src,event) updateSlider(obj, src, event));
             set(obj.handles_.sldTime,  'callback', @(src,event) updateSlider(obj, src, event));
@@ -35,9 +42,8 @@ classdef MaskEditor < handle
             
             set(obj.handles_.figure1,  'closerequestfcn', @(src,event) closeFcn(obj, src, event));
             
-            set(obj.handles_.figure1,  'WindowButtonDownFcn', @(src, event) startDrawing(obj, src, event));
-            set(obj.handles_.figure1, 'WindowButtonUpFcn', @(src, event) stopDrawing(obj, src, event));
-            
+            set(obj.handles_.uiPaintTool, 'OnCallback', @(src, event) togglePencil(obj, src, event));
+            set(obj.handles_.uiPaintTool, 'OffCallback', @(src, event) togglePencil(obj, src, event));
         end
         
     end
@@ -50,7 +56,7 @@ classdef MaskEditor < handle
                 '*.tif; *.tiff', 'TIFF stacks (*.tif; *.tiff)'},'Select Image File');
             
             if fname == 0
-                return;                
+                return;
             end
             
             obj.baseImgPath = fullfile(fpath, fname);
@@ -98,13 +104,13 @@ classdef MaskEditor < handle
                         obj.handles_.sldTime.SliderStep = [1. 1];
                         obj.handles_.sldTime.Enable = 'off';
                     end
-                    obj.handles_.sldTime.Value = 1;              
+                    obj.handles_.sldTime.Value = 1;
                     obj.handles_.txtZPos.String = 1;
                     obj.handles_.txtZPos.Enable = 'on';
                     obj.handles_.txtSizeT.String = sprintf('of %d', obj.handles_.sldTime.Max);
                     
             end
-                        
+            
             %Enable the Mask menu
             obj.handles_.mnuMask.Enable = 'on';
             
@@ -125,12 +131,20 @@ classdef MaskEditor < handle
             maskFinfo = imfinfo(obj.maskPath);
             
             obj.maskData = false(maskFinfo(1).Height,maskFinfo(1).Width, obj.handles_.sldTime.Max);
-            for iZ = 1:numel(maskFinfo)
-                obj.maskData(:,:,iZ) = imread(obj.maskPath, iZ);                
+            for iT = 1:numel(maskFinfo)
+                obj.maskData(:,:,iT) = imread(obj.maskPath, iT);
             end
             
             updateImage(obj);
             
+            %Change the menu item description
+            obj.handles_.mnuOverwriteMask.Text = ['Overwrite ', fname];
+            
+            %Enable the save menu items
+            obj.handles_.mnuOverwriteMask.Enable = 'on';
+            obj.handles_.mnuSaveAsMask.Enable = 'on';
+            
+            obj.handles_.mnuFunctions.Enable = 'on';
         end
         
         function updateImage(obj, src, events)
@@ -139,17 +153,21 @@ classdef MaskEditor < handle
                 obj.handles_.sldChannel.Value,...
                 obj.handles_.sldTime.Value);
             
-            if ~isempty(obj.baseImgData)
-                if ~isempty(obj.maskData)
-                    mask = obj.maskData(:,:,obj.handles_.sldTime.Value);
-                else
-                    mask = false(size(obj.baseImgData));
-                end
-                
-                img = MaskEditor.showoverlay(obj.baseImgData, mask);
-                imshow(img, [], 'Parent', obj.handles_.axes1);
-            end
+            obj.baseImgHandle = imshow(obj.baseImgData, [],  'Parent', obj.handles_.axes1);
             
+            hold on
+            maskColor = cat(3, zeros(size(obj.baseImgData)), ...
+                ones(size(obj.baseImgData)), zeros(size(obj.baseImgData)));
+            
+            obj.maskHandle = imshow(maskColor, 'Parent', obj.handles_.axes1);
+            
+            if ~isempty(obj.maskData)
+                mask = obj.maskData(:,:,obj.handles_.sldTime.Value);
+            else
+                mask = false(size(obj.baseImgData));
+            end
+            set(obj.maskHandle, 'AlphaData', mask);
+            hold off
         end
         
         function delete(obj)
@@ -178,7 +196,7 @@ classdef MaskEditor < handle
             switch src.Tag
                 
                 case 'sldTime'
-            
+                    
                     %Update the text box
                     obj.handles_.txtTime.String = src.Value;
                     
@@ -215,15 +233,15 @@ classdef MaskEditor < handle
                 case 'txtTime'
                     validMax = obj.handles_.sldTime.Max;
                     oldValue = obj.handles_.sldTime.Value;
-                
-            end            
+                    
+            end
             
             newValue = str2double(src.String);
             if newValue ~= oldValue
                 %Only make change if the value has changed
                 
                 if newValue < 1
-                    newValue = 1;                    
+                    newValue = 1;
                 elseif newValue > validMax
                     newValue = validMax;
                 end
@@ -251,15 +269,18 @@ classdef MaskEditor < handle
                 updateImage(obj);
             end
             
- 
+            
             
             
         end
-
+        
         function startDrawing(obj, src, event)
             
             if ~isempty(obj.maskData)
-                %Start drawing
+                %Update the drawing
+                draw(obj);
+                
+                %Start drawing if mouse is still down
                 set(obj.handles_.figure1, 'WindowButtonMotionFcn', @(src, events) draw(obj, src, events));
             end
             
@@ -267,12 +288,10 @@ classdef MaskEditor < handle
         
         function draw(obj, src, events)
             
-            %Check if mouse is in axes position
-            
-            %This returns the mouse coordinates relative to the axes/figure
-            %position
+            %Get mouse coordinates relative to the axes/figure position
             C = get(obj.handles_.axes1, 'CurrentPoint');
             
+            %Check that mouse is within the image area
             xlim = get(obj.handles_.axes1, 'xlim');
             ylim = get(obj.handles_.axes1, 'ylim');
             
@@ -280,154 +299,240 @@ classdef MaskEditor < handle
             inY = C(1,2) >= ylim(1) && C(1,2) <= ylim(2);
             
             if inX && inY
-                %I think this assignment is wrong
                 
-                obj.maskData(floor(C(1,2)) + 1, floor(C(1,1)) + 1, obj.handles_.sldTime.Value) = true;
-                %disp(obj.maskData(floor(C(1,2)) + 1, floor(C(1,1)) + 1, obj.handles_.sldTime.Value))
+                if ~isempty(obj.lastPt)
+                    
+                    %Interpolate the data based on the end points
+                    
+                   [drawX, drawY] = bresenham(obj.lastPt(1), obj.lastPt(2), C(1,1), C(1,2));
+                                        
+%                     xx = floor([obj.lastPt(1), C(1,1)]);
+%                     yy = floor([obj.lastPt(2), C(1,2)]);
+%                     
+%                     %Another solution is to only interpolate the largest
+%                     %difference
+%                     if diff(xx) > diff(yy)
+%                         
+%                         drawX = floor(linspace(floor(obj.lastPt(1)),floor(C(1,1)),...
+%                             abs(floor(obj.lastPt(1)) - floor(C(1,1)))));
+%                         
+%                         if numel(drawX) > 1
+%                             drawY = floor(interp1(xx,yy,drawX,'linear'));
+%                         else
+%                             drawX = floor(C(1,1));
+%                             drawY = floor(C(1,2));
+%                         end
+%                         
+%                     else
+%                         drawY = floor(linspace(floor(obj.lastPt(2)),floor(C(1,2)),...
+%                             abs(floor(obj.lastPt(2)) - floor(C(1,2)))));
+%                         
+%                         if numel(drawY) > 1
+%                             drawX = floor(interp1(yy,xx,drawY,'linear'));
+%                         else
+%                             drawX = floor(C(1,1));
+%                             drawY = floor(C(1,2));
+%                         end
+%                     end
+     
+                else
+                    
+                    %Only select the current pixel
+                    drawX = floor(C(1,1));
+                    drawY = floor(C(1,2));
+                    
+                end
+                
+                try
+                switch get(gcf, 'selectiontype')
+                    case 'normal'
+                        obj.maskData(drawY, drawX, obj.handles_.sldTime.Value) = true;
+                        
+                    case 'alt'
+                        obj.maskData(drawY, drawX, obj.handles_.sldTime.Value) = false;
+                end
+                
+                obj.lastPt = [drawX(end), drawY(end)];
+                
+                catch
+                    disp(drawX)
+                    disp(drawY)
+                    
+                end
+                
+                %Update the drawing
+                set(obj.maskHandle, 'AlphaData', obj.maskData(:,:, obj.handles_.sldTime.Value));
+                
             else
-                disp('false')
+                disp('Outside image')
+                obj.lastPt = [];
             end
             
-            img = MaskEditor.showoverlay(obj.baseImgData, obj.maskData(:,:, obj.handles_.sldTime.Value));
-            imshow(img, 'Parent', obj.handles_.axes1);
-            
 %             pause(0.1);
-            %                 keyboard
+            function [x, y] = bresenham(x1,y1,x2,y2)
+                
+                %Matlab optmized version of Bresenham line algorithm. No loops.
+                %Format:
+                %               [x y]=bham(x1,y1,x2,y2)
+                %
+                %Input:
+                %               (x1,y1): Start position
+                %               (x2,y2): End position
+                %
+                %Output:
+                %               x y: the line coordinates from (x1,y1) to (x2,y2)
+                %
+                %Usage example:
+                %               [x y]=bham(1,1, 10,-5);
+                %               plot(x,y,'or');
+                
+                x1=round(x1); x2=round(x2);
+                y1=round(y1); y2=round(y2);
+                
+                dx=abs(x2-x1);
+                dy=abs(y2-y1);
+                
+                steep=abs(dy)>abs(dx);
+                
+                if steep
+                    t=dx;
+                    dx=dy;
+                    dy=t;
+                end
+                
+                %The main algorithm goes here.
+                if dy==0
+                    q=zeros(dx+1,1);
+                else
+                    q=[0;diff(mod((floor(dx/2):-dy:-dy*dx+floor(dx/2))',dx))>=0];
+                end
+                
+                %and ends here.
+                
+                if steep
+                    if y1<=y2
+                        y=(y1:y2)';
+                    else
+                        y=(y1:-1:y2)';
+                    end
+                    if x1<=x2
+                        x=x1+cumsum(q);
+                    else
+                        x=x1-cumsum(q);
+                    end
+                else
+                    if x1<=x2
+                        x=(x1:x2)';
+                    else
+                        x=(x1:-1:x2)';
+                    end
+                    if y1<=y2
+                        y=y1+cumsum(q);
+                    else
+                        y=y1-cumsum(q);
+                    end
+                end
+            end
+          
         end
-        
-        
+                
         function stopDrawing(obj,src, event)
             
             set(obj.handles_.figure1, 'WindowButtonMotionFcn', '');
-            
-            
-%             keyboard
+            obj.lastPt = [];            
             
         end
         
+        function saveMask(obj, src, event)
+            
+            switch src.Tag
+                
+                case 'mnuSaveAsMask'
+                    
+                    [maskFN, maskP] = uiputfile({'*.tif; *.tiff','TIF stack (*.tif; *.tiff)'},...
+                        'Save Mask As...');
+                    
+                    if maskFN == 0
+                        return;                        
+                    end
+                
+                    maskFN = fullfile(maskP, maskFN);
+                
+                case 'mnuOverwriteMask'
+                    maskFN = obj.maskPath;
+                
+            end
+            
+            imwrite(obj.maskData(:,:,1),maskFN,'compression','none');
+            
+            for iT = 2:size(obj.maskData,3)
+                imwrite(obj.maskData(:,:,iT),maskFN,'compression','none', 'writemode','append');                
+            end
+            
+            %Update the current mask path
+            obj.maskPath = maskFN;
+            
+            
+        end
+        
+        function drawCapsules(obj, src, event)
+            
+            %Get current data
+            
+            currMask = obj.maskData(:,:,obj.handles_.sldTime.Value);
+            
+            currMask = bwmorph(currMask, 'skel');
+            
+            props = regionprops(currMask,'MajorAxisLength','MinorAxisLength','Centroid','Orientation');
+            
+            %--- Draw code ---%
+            imgOut = zeros(size(obj.maskData(:,:,obj.handles_.sldTime.Value)));
+            
+            xx = 1:size(imgOut, 2);
+            yy = 1:size(imgOut, 1);
+            
+            [xx, yy] = meshgrid(xx,yy);
+            
+            for ii = 1:numel(props)
+                
+                center = props(ii).Centroid;
+                theta = props(ii).Orientation/180 * pi;
+                cellLen = floor(props(ii).MajorAxisLength);
+                cellWidth = floor(props(ii).MinorAxisLength);
+                
+                rotX = (xx - center(1)) * cos(theta) - (yy - center(2)) * sin(theta);
+                rotY = (xx - center(1)) * sin(theta) + (yy - center(2)) * cos(theta);
+                
+                %Plot the rectangle
+                imgOut(abs(rotX) < (cellLen/2 - cellWidth/2) & abs(rotY) < cellWidth/2) = ii;
+                
+                % %Plot circles on either end
+                imgOut(((rotX-(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                imgOut(((rotX+(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                
+            end
+            
+            obj.maskData(:,:,obj.handles_.sldTime.Value) = imgOut;
+            updateImage(obj);
+            
+        end
+        
+        function togglePencil(obj, src, event)
+           
+            switch event.EventName
+                
+                case 'On'
+                    
+                    set(obj.handles_.figure1,  'WindowButtonDownFcn', @(src, event) startDrawing(obj, src, event));
+                    set(obj.handles_.figure1, 'WindowButtonUpFcn', @(src, event) stopDrawing(obj, src, event));
+                    
+                case 'Off'
+                    
+                    set(obj.handles_.figure1,  'WindowButtonDownFcn', '');
+                    set(obj.handles_.figure1, 'WindowButtonUpFcn', '');
+            end
+        end
     end
     
-    methods (Static)
-        
-        function varargout = showoverlay(img, mask, varargin)
-            %SHOWOVERLAY  Overlays a mask on to a base image
-            %
-            %  SHOWOVERLAY(I, M) will overlay mask M over the image I, displaying it in
-            %  a figure window.
-            %
-            %  C = SHOWOVERLAY(I, M) will return the composited image as a matrix
-            %  C. This allows multiple masks to be composited over the same image. C
-            %  should be of the same class as the input image I. However, if the input
-            %  image I is a double, the output image C will be normalized to between 0
-            %  and 1.
-            %
-            %  Optional parameters can be supplied to the function to modify both the
-            %  color and the transparency of the masks:
-            %
-            %     'Color' - 1x3 vector specifying the color of the overlay in
-            %               normalized RGB coordinates (e.g. [0 0 1] = blue)
-            %
-            %     'Opacity' - Value between 0 - 100 specifying the alpha level of
-            %                      the overlay
-            %
-            %  Examples:
-            %
-            %    %Load a test image
-            %    testImg = imread('cameraman.tif');
-            %
-            %    %Generate a masked region
-            %    maskIn = false(size(testImg));
-            %    maskIn(50:70,50:200) = true;
-            %
-            %    %Store the image to a new variable
-            %    imgOut = SHOWOVERLAY(testImg, maskIn);
-            %
-            %    %Generate a second mask
-            %    maskIn2 = false(size(testImg));
-            %    maskIn2(100:180, 50:100) = true;
-            %
-            %    %Composite and display the second mask onto the same image as a
-            %    %magenta layer with 50% transparency
-            %    SHOWOVERLAY(imgOut, maskIn2, 'Color', [1 0 1], 'Transparency', 50);
-            
-            % Author: Jian Wei Tay (jian.tay@colorado.edu)
-            % Version 2018-Feb-01
-            
-            ip = inputParser;
-            ip.addParameter('Color',[0 1 0]);
-            ip.addParameter('Opacity',100);
-            ip.parse(varargin{:});
-            
-            alpha = ip.Results.Opacity / 100;
-            
-            %Get the original image class
-            imageClass = class(img);
-            imageIsInteger = isinteger(img);
-            
-            %Process the input image
-            img = double(img);
-            img = img ./ max(img(:));
-            
-            if size(img,3) == 1
-                %Convert into an RGB image
-                img = repmat(img, 1, 1, 3);
-            elseif size(img,3) == 3
-                %Do nothing
-            else
-                error('showoverlay:InvalidInputImage',...
-                    'Expected input to be either a grayscale or RGB image.');
-            end
-            
-            %Process the mask
-            if any(mask(:))
-                mask = double(mask);
-                mask = mask ./ max(mask(:));
-                
-                if size(mask,3) == 1
-                    %Convert mask into an RGB image
-                    mask = repmat(mask, 1, 1, 3);
-                    
-                    for iC = 1:3
-                        mask(:,:,iC) = mask(:,:,iC) .* ip.Results.Color(iC);
-                    end
-                elseif size(mask,3) == 3
-                    %Do nothing
-                else
-                    error('showoverlay:InvalidMask',...
-                        'Expected mask to be either a logical or RGB image.');
-                end
-                
-                %Make the composite image
-                replacePx = mask ~= 0;
-                img(replacePx) = img(replacePx) .* (1 - alpha) + mask(replacePx) .* alpha;
-            end
-            
-            %Recast the image into the original image class
-            if imageIsInteger
-                multFactor = double(intmax(imageClass));
-            else
-                multFactor = 1;
-            end
-            
-            img = img .* multFactor;
-            img = cast(img, imageClass);
-            
-            %Produce the desired outputs
-            if nargout == 0
-                imshow(img,[])
-            else
-                varargout = {img};
-            end
-            
-        end
-        
-        function trackMouse(src, eventdata)
-            
-            keyboard
-            
-        end
-        
-    end
-   
     
 end
