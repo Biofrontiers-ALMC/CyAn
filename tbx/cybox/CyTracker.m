@@ -32,10 +32,11 @@ classdef CyTracker < handle
         ThresholdLevel = 1.4;
         
         MaxCellMinDepth = 2;
-        MinCellArea = 500;
+        CellAreaLim = [500 2000];
         
         %Spot detection options
         SpotChannel = '';
+        SpotSegMode = 'localmax';
         SpotThreshold = 2.5;
         SpotBgSubtract = false;
         
@@ -149,6 +150,12 @@ classdef CyTracker < handle
                 fname = varargin(1:end - 1);
                 
                 outputDir = varargin{end};
+                
+                if isempty(outputDir)
+                    %If dir was empty, then use the current dir as the
+                    %output path
+                    outputDir = pwd;                    
+                end
                 
                 if ~exist(outputDir, 'dir')
                     mkdir(outputDir);                    
@@ -517,7 +524,7 @@ classdef CyTracker < handle
                         %Segment the cells
                         cellLabels = CyTracker.getCellLabels(imgToSegment, ...
                             opts.ThresholdLevel, opts.SegMode,...
-                            opts.MaxCellMinDepth, opts.MinCellArea);
+                            opts.MaxCellMinDepth, opts.CellAreaLim);
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
@@ -527,7 +534,7 @@ classdef CyTracker < handle
                     %Run spot detection if the SpotChannel property is set
                     if ~isempty(opts.SpotChannel)
                         dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
-                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract);
+                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode);
                     else 
                         dotLabels = [];
                     end
@@ -555,14 +562,18 @@ classdef CyTracker < handle
                             try
                                 %Link data to existing tracks
                                 trackLinker = trackLinker.assignToTrack(iT, cellData);
-                            catch
+                            catch ME
                                 saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
                                 if strcmpi(saveData,'y')
                                     trackArray = trackLinker.getTrackArray; %#ok<NASGU>
                                     save([saveFN, '.mat'], 'trackArray');
                                 end
                                 clear trackArray
-                                return;
+                                
+                                rethrow(ME)
+                                
+%                                 return;
+                                
                             end
                         end
                         
@@ -591,7 +602,8 @@ classdef CyTracker < handle
                             end
                             
                             if ~isempty(opts.SpotChannel)
-                                spotImgOut = CyTracker.makeAnnotatedImage(iT, dotImg, imdilate(dotLabels, strel('diamond', 3)), trackLinker, 'notracks');
+                                spotImgOut = CyTracker.makeAnnotatedImage(iT, dotImg, dotLabels, trackLinker, 'notracks');
+                                spotImgOut = CyTracker.showoverlay(spotImgOut, bwperim(cellLabels), 'Color', [1 0 1]);
                                 
                                 if numel(frameRange) > 1
                                     spotVidObj.writeVideo(spotImgOut);
@@ -640,7 +652,7 @@ classdef CyTracker < handle
             
             %Get standard data
             cellData = regionprops(cellLabels, ...
-                'Area','Centroid','PixelIdxList','MajorAxisLength', 'MinorAxisLength');
+                'Area','Centroid','PixelIdxList','MajorAxisLength', 'MinorAxisLength','Orientation');
             
             %Remove non-existing data
             cellData([cellData.Area] ==  0) = [];
@@ -653,15 +665,42 @@ classdef CyTracker < handle
                     cellData(iCell).(['TotalInt',regexprep(bfReader.channelNames{iC},'[^\w\d]*','')]) = ...
                         sum(currImage(cellData(iCell).PixelIdxList));
                     
+                    %Measure spot data
                     if ~isempty(spotLabels)
-                        cellData(iCell).NumSpots = nnz(spotLabels(cellData(iCell).PixelIdxList));
+                        currSpotLabels = false(size(spotLabels));
+                        currSpotLabels(cellData(iCell).PixelIdxList) = spotLabels(cellData(iCell).PixelIdxList);
+                        spotData = regionprops(currSpotLabels,'Centroid','PixelIdxList');
+                        
+                        cellData(iCell).NumSpots = numel(spotData);
+                        cellData(iCell).NormSpotDist = [];%zeros(1,numel(spotData)*2);
+                        cellData(iCell).MeanSpotInt = zeros(1,numel(spotData));
+                        
+                        for iSpots = 1:numel(spotData)
+                            
+                            %Get the normalized distance along the axes
+                            diffVec = spotData(iSpots).Centroid - cellData(iCell).Centroid;
+                            
+                            %Unit vector along cell axis
+                            unitVec = [cos((cellData(iCell).Orientation/180) * pi), sin((cellData(iCell).Orientation/180) * pi)];
+                            
+                            %Calculate the projections
+                            projLen = (diffVec(1) * unitVec(1) + diffVec(2) * unitVec(2))./(cellData(iCell).MajorAxisLength/2);
+                            %projWidth = (sqrt(sum((diffVec - projLen * unitVec).^2)))./(cellData(iCell).MinorAxisLength/2);
+                                
+                            %THIS VALUE IS INCORRECT
+                            %cellData(iCell).NormSpotDist((2*(iSpots - 1) + 1):(2* iSpots)) = [normSpotDistX, normSpotDistY]./cellData(iCell).MajorAxisLength;
+                            %cellData(iCell).NormSpotDist((2*(iSpots - 1) + 1):(2* iSpots)) = [projLen, projWidth];
+                            cellData(iCell).NormSpotDist(iSpots) = projLen;
+                            cellData(iCell).MeanSpotInt(iSpots) = mean(currImage(spotData(iSpots).PixelIdxList));
+                        end
+                        
                     end
                 end
             end
             
         end
         
-        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, minCellArea, varargin)
+        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, cellAreaLim, varargin)
             %GETCELLLABELS  Segment and label individual cells
             %
             %  L = CyTracker.GETCELLLABELS(I) will segment the cells in image
@@ -718,15 +757,14 @@ classdef CyTracker < handle
                     %Tidy up
                     mask = imclearborder(mask);
                     mask = bwmorph(mask,'thicken', 8);
-                    mask = bwareaopen(mask, minCellArea);
-                    
+                   
                     %Redraw the masks using cylinders
-                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
-                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
                     
-%                     %Converting from labels to mask
-%                     refMask = refLabels > 0;
-%                     refMask(boundarymask(refLabels)) = 0;
+                    %Remove cells which are too small or too large
+                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                    
+                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
                     
                 case 'fluorescence'
             
@@ -779,20 +817,26 @@ classdef CyTracker < handle
                     
                     cellLabels = watershed(dd);
                     cellLabels = imclearborder(cellLabels);
-                    
                     cellLabels = imopen(cellLabels, strel('disk',6));
                     
-                case 'experimental'
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
                     
-                   
+                    %Remove cells which are too small or too large
+                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                    
+                    cellLabels = zeros(size(cellLabels));
+                    for ii = 1:numel(rpCells)
+                        cellLabels(rpCells(ii).PixelIdxList) = ii;
+                    end
+                                        
+                case 'experimental'
+                                       
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
                     bgImage = imopen(cellImage, strel('disk', 20));
                     cellImageTemp = cellImage - bgImage;
                     cellImageTemp = imgaussfilt(cellImageTemp,5);
-                   
-%                     imshow(cellImageTemp,[])
-%                     keyboard
                     
                     %Fit the background
                     [nCnts, xBins] = histcounts(cellImageTemp(:));
@@ -805,10 +849,7 @@ classdef CyTracker < handle
                     
                     %Compute initial cell mask
                     mask = cellImageTemp > thLvl;
-%                     imshow(mask)
 
-                   
-%                     mask = imfill(mask, 'holes');
                     mask = imopen(mask, strel('disk', 3));
                     mask = imclose(mask, strel('disk', 3));
                     
@@ -824,13 +865,9 @@ classdef CyTracker < handle
                     
                     %Tidy up
                     mask = imclearborder(mask);
-                    
                     mask = bwareaopen(mask, 100);
-                    
                     mask = bwmorph(mask,'thicken', 8);
-                    
-%                     showoverlay(cellImage, mask)
-%                     keyboard
+
                     
                     %Identify cells which are too large and try to split
                     %them
@@ -870,7 +907,7 @@ classdef CyTracker < handle
                         LL = watershed(dd);
                         newMask(LL == 0) = 0;
                         
-                        newMask = bwareaopen(newMask, minCellArea);
+                        newMask = bwareaopen(newMask, min(cellAreaLim));
                         newMask = bwmorph(newMask,'thicken', 8);
                         %                         showoverlay(cellImage, newMask);
                         %                         keyboard
@@ -891,13 +928,15 @@ classdef CyTracker < handle
                     
                     if ~exportRaw
                         %Redraw the masks using cylinders
-                        rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation'});
+                        rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+                        
+                        %Remove cells which are too small or too large
+                        rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                        
                         cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
                     else
                         cellLabels = mask;
                     end
-%                     showoverlay(cellImage, cellLabels)
-%                     keyboard
                     
             end
             
@@ -908,52 +947,114 @@ classdef CyTracker < handle
             
         end
         
-        function dotLabels = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub)
+        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode)
             %SEGMENTSPOTS  Finds spots
-            
+                    
             %Convert the carboxysome image to double
             imgInFilt = double(imgIn);
-            
-            if bgSub
-                %Perform a tophat subtraction
-                bgImg = imopen(imgInFilt, strel('disk', 7));
-                imgInFilt = imgInFilt - bgImg;
+                    
+            switch lower(segMode)
+                
+                case 'localmax'
+                    
+                    if bgSub
+                        %Perform a tophat subtraction
+                        bgImg = imopen(imgInFilt, strel('disk', 7));
+                        imgInFilt = imgInFilt - bgImg;
+                    end
+                    
+                    %Apply a median filter to smooth the image
+                    imgInFilt = medfilt2(imgInFilt,[2 2]);
+                    
+                    if islogical(cellLabels)
+                        cellLabels = bwlabel(cellLabels);
+                    end
+                    
+                    %Find local maxima in the image using dilation
+                    dilCbxImage = imdilate(imgInFilt,strel('disk',2));
+                    dotMask = dilCbxImage == imgInFilt;
+                    
+                    spotMask = false(size(imgInFilt));
+                    
+                    %Refine the dots by cell intensity
+                    for iCell = 1:max(cellLabels(:))
+                        
+                        currCellMask = cellLabels == iCell;
+                        
+                        cellBgInt = mean(imgIn(currCellMask));
+                        
+                        currDotMask = dotMask & currCellMask;
+                        currDotMask(imgIn < spotThreshold * cellBgInt) = 0;
+                        
+                        spotMask = spotMask | currDotMask;
+                    end
+                    %
+                    %             %Refine the dots by global intensity
+                    %             meanDotInt = mean(imgIn(dotLabels));
+                    %             dotLabels(imgIn(dotLabels) < 1.5 * meanDotInt) = 0;
+                    
+                    
+                    %             keyboard
+                    %dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
+                    
+                case {'dog', 'diffgaussian'}
+                    %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
+                    expSpotDia = 3;
+                    
+                    sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
+                    sigma2 = sqrt(2) * sigma1;
+                    
+                    g1 = imgaussfilt(imgInFilt, sigma1);
+                    g2 = imgaussfilt(imgInFilt, sigma2);
+                    
+                    dogImg = imcomplement(g2 - g1);
+                    
+                    bgVal = mean(dogImg(:));
+                    
+                    [nCnts, xBins] = histcounts(dogImg(:));
+                    xBins = diff(xBins) + xBins(1:end-1);
+                    
+                    gf = fit(xBins', nCnts', 'gauss1');
+                    
+                    spotBg = gf.b1 + spotThreshold .* gf.c1;
+                    
+                    %Segment the spots
+                    spotMask = dogImg > spotBg;
+                    spotMask(~(cellLabels >0)) = false;
+                    
+%                     %Separate the spots
+%                     locMax = imregionalmax(dogImg,8);
+%                     locMax(~(cellLabels > 0)) = false;
+                    
+                    dd = -bwdist(~spotMask);
+                    LL = watershed(dd);
+                    
+                    spotMask(LL == 0) = false;
+%                     
+%                     %Refine by CNR
+%                     spotCC = bwconncomp(spotMask);
+%                     for spotIdx = 1:spotCC.NumObjects
+%                         
+%                         currMask = false(size(spotMask));
+%                         currMask(spotCC.PixelIdxList{spotIdx}) = true;
+%                         
+%                         currMask2 = bwmorph(currMask,'grow', 4);
+%                         currMask2(currMask) = false;
+%                         
+%                         CNR = mean(
+%                         
+%                         
+%                     end
+%        
+                    
+                     
+%                     imgOut = showoverlay(dogImg, spotMask);
+%                     showoverlay(imgOut, locMax, 'Color', [1 0 1]);
+%                     
+%                     showoverlay(dogImg, spotMask, 'Opacity', 30)
+%                     
+%                     keyboard
             end
-            
-            %Apply a median filter to smooth the image
-            imgInFilt = medfilt2(imgInFilt,[2 2]);
-            
-            if islogical(cellLabels)
-                cellLabels = bwlabel(cellLabels);                
-            end
-            
-            %Find local maxima in the image using dilation
-            dilCbxImage = imdilate(imgInFilt,strel('disk',2));
-            dotMask = dilCbxImage == imgInFilt;
-            
-            dotLabels = false(size(imgInFilt));
-            
-            %Refine the dots by cell intensity
-            for iCell = 1:max(cellLabels(:))
-                
-                currCellMask = cellLabels == iCell;
-                
-                cellBgInt = mean(imgIn(currCellMask));
-                
-                currDotMask = dotMask & currCellMask;
-                currDotMask(imgIn < spotThreshold * cellBgInt) = 0;
-                
-                dotLabels = dotLabels | currDotMask;
-            end
-%             
-%             %Refine the dots by global intensity
-%             meanDotInt = mean(imgIn(dotLabels));
-%             dotLabels(imgIn(dotLabels) < 1.5 * meanDotInt) = 0;
-            
-            
-            %             keyboard
-            %dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
-            
         end
         
         function varargout = showoverlay(img, mask, varargin)
@@ -1174,18 +1275,19 @@ classdef CyTracker < handle
             imgOut = insertText(imgOut,[size(baseImage,2), 1],iT,...
                 'BoxOpacity',0,'TextColor','white','AnchorPoint','RightTop');
             
-            if showTracks
-                for iTrack = 1:trackData.NumTracks
+            
+            for iTrack = 1:trackData.NumTracks
+                
+                currTrack = trackData.getTrack(iTrack);
+                
+                if iT >= currTrack.FirstFrame && iT <= currTrack.LastFrame
                     
-                    currTrack = trackData.getTrack(iTrack);
+                    trackCentroid = cat(2,currTrack.Data.Centroid);
                     
-                    if iT >= currTrack.FirstFrame && iT <= currTrack.LastFrame
-                        
-                        trackCentroid = cat(2,currTrack.Data.Centroid);
-                        
-                        imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
-                            'BoxOpacity', 0,'TextColor','yellow');
-                        
+                    imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
+                        'BoxOpacity', 0,'TextColor','yellow');
+                    
+                    if showTracks
                         if iT > currTrack.FirstFrame
                             imgOut = insertShape(imgOut, 'line', trackCentroid, 'color','white');
                         end
