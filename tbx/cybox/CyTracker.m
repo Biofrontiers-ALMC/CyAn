@@ -16,48 +16,45 @@ classdef CyTracker < handle
     properties
         
         %Image options
-        FrameRange = Inf;
-        SeriesRange = Inf;
-        OutputMovie = true;
+        FrameRange double = Inf;
+        SeriesRange double = Inf;
+        OutputMovie logical = true;
         
-        UseMasks = false;
-        InputMaskDir = 0;
-        
-        %Export options
-%         ExportMasks = false;
+        UseMasks logical = false;
+        InputMaskDir char = '';
                 
         %Segmentation options
-        ChannelToSegment = '';
-        SegMode = 'Brightfield';
-        ThresholdLevel = 1.4;
+        ChannelToSegment char = '';
+        SegMode char = 'Brightfield';
+        ThresholdLevel double = 1.4;
         
-        MaxCellMinDepth = 2;
-        CellAreaLim = [500 2000];
+        MaxCellMinDepth double = 2;
+        CellAreaLim(1,2) double = [500 2000];
         
         %Spot detection options
-        SpotChannel = '';
-        SpotSegMode = 'localmax';
-        SpotThreshold = 2.5;
-        SpotBgSubtract = false;
+        SpotChannel char = '';
+        SpotSegMode char = 'localmax';
+        SpotThreshold double = 2.5;
+        SpotBgSubtract logical = false;
         
         %Track linking parameters
-        LinkedBy = 'PixelIdxList';
-        LinkCalculation = 'pxintersect';
-        LinkingScoreRange = [1, 4.1];
-        MaxTrackAge = 2;
+        LinkedBy char = 'PixelIdxList';
+        LinkCalculation char = 'pxintersect';
+        LinkingScoreRange(1,2) double = [1, 4.1];
+        MaxTrackAge double = 2;
         
         %Mitosis detection parameters
-        TrackMitosis = true;
-        MinAgeSinceMitosis = 2;
-        MitosisParameter = 'PixelIdxList';          %What property is used for mitosis detection?
-        MitosisCalculation = 'pxintersect';
-        MitosisScoreRange = [1, 4];
-        MitosisLinkToFrame = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
-        LAPSolver = 'lapjv';
+        TrackMitosis logical = true;
+        MinAgeSinceMitosis double = 2;
+        MitosisParameter char = 'PixelIdxList';          %What property is used for mitosis detection?
+        MitosisCalculation char = 'pxintersect';
+        MitosisScoreRange(1,2) double = [1, 4];
+        MitosisLinkToFrame double = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
+        LAPSolver char = 'lapjv';
         
         %Parallel processing options
-        EnableParallel = false;
-        MaxWorkers = Inf;
+        EnableParallel logical = false;
+        MaxWorkers double = Inf;
         
     end
         
@@ -115,7 +112,7 @@ classdef CyTracker < handle
                 end
                
                 %Prompt for mask directory
-                if obj.UseMasks && isequal(obj.InputMaskDir, 0)
+                if obj.UseMasks && isempty(obj.InputMaskDir)
                     obj.InputMaskDir = uigetdir(fileparts(fname{1}), 'Select mask directory');
                     
                     if isequal(obj.InputMaskDir,0)
@@ -142,7 +139,7 @@ classdef CyTracker < handle
                 
                 %Check that the InputMaskDir property is set if masks are
                 %present
-                if obj.UseMasks && isequal(obj.InputMaskDir, 0)
+                if obj.UseMasks && isempty(obj.InputMaskDir)
                     error('CyTracker:InputMaskDirNotSet', ...
                         'The InputMaskDir property must be set to the mask path.')
                 end
@@ -217,6 +214,10 @@ classdef CyTracker < handle
                 [fname, fpath] = uigetfile({'*.txt','Text file (*.txt)';...
                     '*.*','All files (*.*)'},...
                     'Select settings file');
+                
+                if fname == 0
+                    return;                    
+                end
                 
                 optionsFile = fullfile(fpath,fname);
                 
