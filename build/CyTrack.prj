@@ -1,14 +1,14 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
   <configuration build-checksum="2908473156" file="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack.prj" location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
-    <param.appname>CyTrack (v1.0.5)</param.appname>
+    <param.appname>CyTrack (v1.0.6)</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
     <param.summary>Segmentation and Tracking code for Cyanobacteria</param.summary>
     <param.description>Please see wiki for usage instructions: https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home</param.description>
     <param.screenshot />
-    <param.version>1.0.5</param.version>
-    <param.output>${PROJECT_ROOT}\CyTrack (v1.0.5).mltbx</param.output>
+    <param.version>1.0.6</param.version>
+    <param.output>${PROJECT_ROOT}\CyTrack (v1.0.6).mltbx</param.output>
     <param.products.name>
       <item>MATLAB</item>
       <item>Computer Vision System Toolbox</item>
@@ -70,7 +70,7 @@
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack (v1.0.5).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.0.5).mltbx</file>
+      <file location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack (v1.0.6).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.0.6).mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>

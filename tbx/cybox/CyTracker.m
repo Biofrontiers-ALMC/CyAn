@@ -36,6 +36,7 @@ classdef CyTracker < handle
         SpotSegMode char = 'localmax';
         SpotThreshold double = 2.5;
         SpotBgSubtract logical = false;
+        MinSpotArea double = 4;
         
         %Track linking parameters
         LinkedBy char = 'PixelIdxList';
@@ -535,7 +536,7 @@ classdef CyTracker < handle
                     %Run spot detection if the SpotChannel property is set
                     if ~isempty(opts.SpotChannel)
                         dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
-                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode);
+                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea);
                     else 
                         dotLabels = [];
                     end
@@ -835,18 +836,26 @@ classdef CyTracker < handle
                                        
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
-                    bgImage = imopen(cellImage, strel('disk', 20));
+                    bgImage = imopen(cellImage, strel('disk', 30));
                     cellImageTemp = cellImage - bgImage;
-                    cellImageTemp = imgaussfilt(cellImageTemp,5);
+                    cellImageTemp = imadjust(imgaussfilt(cellImageTemp,2), [0 0.9], []);
                     
                     %Fit the background
-                    [nCnts, xBins] = histcounts(cellImageTemp(:));
+                    [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
+                    nCnts = smooth(nCnts, 3);
                     xBins = diff(xBins) + xBins(1:end-1);
                     
-                    gf = fit(xBins', nCnts', 'gauss1');
+                    %Find the peak background
+                    [bgPk, bgPkLoc] = max(nCnts);
                     
-                    %Compute the threshold level
-                    thLvl = gf.b1 + thFactor * gf.c1;
+                    %Find point where counts drop to fraction of peak
+                    thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
+                    thLoc = thLoc + bgPkLoc;
+                    
+                    thLvl = xBins(thLoc);
+                    
+%                     gf = fit(xBins', nCnts', 'gauss1');
+%                     thLvl = gf.b1 + thFactor * gf.c1;
                     
                     %Compute initial cell mask
                     mask = cellImageTemp > thLvl;
@@ -948,7 +957,7 @@ classdef CyTracker < handle
             
         end
         
-        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode)
+        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode, minSpotArea)
             %SEGMENTSPOTS  Finds spots
                     
             %Convert the carboxysome image to double
@@ -1027,10 +1036,16 @@ classdef CyTracker < handle
 %                     locMax = imregionalmax(dogImg,8);
 %                     locMax(~(cellLabels > 0)) = false;
                     
+            
+                    spotMask = bwareaopen(spotMask, minSpotArea);
+
                     dd = -bwdist(~spotMask);
                     LL = watershed(dd);
                     
                     spotMask(LL == 0) = false;
+                    
+                    
+                    
 %                     
 %                     %Refine by CNR
 %                     spotCC = bwconncomp(spotMask);
