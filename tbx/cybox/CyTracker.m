@@ -836,9 +836,10 @@ classdef CyTracker < handle
                                        
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
-                    bgImage = imopen(cellImage, strel('disk', 30));
+                    bgImage = imopen(cellImage, strel('disk', 50));
                     cellImageTemp = cellImage - bgImage;
                     cellImageTemp = imadjust(imgaussfilt(cellImageTemp,2), [0 0.9], []);
+                    cellImageTemp = imsharpen(cellImageTemp);
                     
                     %Fit the background
                     [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
