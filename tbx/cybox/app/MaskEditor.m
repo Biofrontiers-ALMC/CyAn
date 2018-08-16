@@ -1,4 +1,5 @@
 classdef MaskEditor < handle
+    %MASKEDITOR  Class for a mask editing app
     
     properties (Hidden)
         
@@ -16,14 +17,24 @@ classdef MaskEditor < handle
         
         lastPt
         
+        prevImage
+        
     end
     
     methods
         
         function obj = MaskEditor
-            
+            %MASKEDITOR  Launches the mask editing app
+            %
+            %  Requires files editorFig.m and editorFig.fig
+
+            %Create GUI handles for the editor
             obj.handles_ = guihandles(editorFig);
             
+            %Define callback functions for the editor
+            set(obj.handles_.figure1,  'closerequestfcn', @(src,event) closeFcn(obj, src, event));
+            
+            %--- Menu items ---%
             set(obj.handles_.mnuLoadImage, 'callback', @(src, event) loadImage(obj, src, event));
             
             set(obj.handles_.mnuLoadMask, 'callback', @(src, event) loadMask(obj, src, event));
@@ -32,6 +43,7 @@ classdef MaskEditor < handle
             
             set(obj.handles_.mnuDrawCapsules, 'callback', @(src, event) drawCapsules(obj, src, event));
             
+            %--- Image sliders for z-position, channel, and time point ---%
             set(obj.handles_.sldZPos,  'callback', @(src,event) updateSlider(obj, src, event));
             set(obj.handles_.sldChannel,  'callback', @(src,event) updateSlider(obj, src, event));
             set(obj.handles_.sldTime,  'callback', @(src,event) updateSlider(obj, src, event));
@@ -40,10 +52,10 @@ classdef MaskEditor < handle
             set(obj.handles_.txtChannel,  'callback', @(src,event) updateTxt(obj, src, event));
             set(obj.handles_.txtTime,  'callback', @(src,event) updateTxt(obj, src, event));
             
-            set(obj.handles_.figure1,  'closerequestfcn', @(src,event) closeFcn(obj, src, event));
-            
+            %--- Toolbar items ---%            
             set(obj.handles_.uiPaintTool, 'OnCallback', @(src, event) togglePencil(obj, src, event));
             set(obj.handles_.uiPaintTool, 'OffCallback', @(src, event) togglePencil(obj, src, event));
+            set(obj.handles_.uiUndo, 'ClickedCallback', @(src, event) undoMask(obj, src, event));
         end
         
     end
@@ -51,6 +63,7 @@ classdef MaskEditor < handle
     methods (Access = private)
         
         function loadImage(obj, src, events)
+            %Load image
             
             [fname, fpath, indx] = uigetfile({'*.nd2', 'Nikon Image Files (*.nd2)';...
                 '*.tif; *.tiff', 'TIFF stacks (*.tif; *.tiff)'},'Select Image File');
@@ -274,9 +287,101 @@ classdef MaskEditor < handle
             
         end
         
+        function saveMask(obj, src, event)
+            
+            switch src.Tag
+                
+                case 'mnuSaveAsMask'
+                    
+                    [maskFN, maskP] = uiputfile({'*.tif; *.tiff','TIF stack (*.tif; *.tiff)'},...
+                        'Save Mask As...');
+                    
+                    if maskFN == 0
+                        return;                        
+                    end
+                
+                    maskFN = fullfile(maskP, maskFN);
+                
+                case 'mnuOverwriteMask'
+                    maskFN = obj.maskPath;
+                
+            end
+            
+            imwrite(obj.maskData(:,:,1),maskFN,'compression','none');
+            
+            for iT = 2:size(obj.maskData,3)
+                imwrite(obj.maskData(:,:,iT),maskFN,'compression','none', 'writemode','append');                
+            end
+            
+            %Update the current mask path
+            obj.maskPath = maskFN;
+            
+            
+        end
+        
+        function drawCapsules(obj, src, event)
+            %DRAWCAPSULES  Converts lines to capsules
+            
+            %Get current data
+            
+            currMask = obj.maskData(:,:,obj.handles_.sldTime.Value);
+            
+            currMask = bwmorph(currMask, 'skel');
+            
+            props = regionprops(currMask,'MajorAxisLength','MinorAxisLength','Centroid','Orientation');
+            
+            %--- Draw code ---%
+            imgOut = zeros(size(obj.maskData(:,:,obj.handles_.sldTime.Value)));
+            
+            xx = 1:size(imgOut, 2);
+            yy = 1:size(imgOut, 1);
+            
+            [xx, yy] = meshgrid(xx,yy);
+            
+            for ii = 1:numel(props)
+                
+                center = props(ii).Centroid;
+                theta = props(ii).Orientation/180 * pi;
+                cellLen = floor(props(ii).MajorAxisLength);
+                cellWidth = floor(props(ii).MinorAxisLength);
+                
+                rotX = (xx - center(1)) * cos(theta) - (yy - center(2)) * sin(theta);
+                rotY = (xx - center(1)) * sin(theta) + (yy - center(2)) * cos(theta);
+                
+                %Plot the rectangle
+                imgOut(abs(rotX) < (cellLen/2 - cellWidth/2) & abs(rotY) < cellWidth/2) = ii;
+                
+                % %Plot circles on either end
+                imgOut(((rotX-(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                imgOut(((rotX+(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
+                
+            end
+            
+            obj.maskData(:,:,obj.handles_.sldTime.Value) = imgOut;
+            updateImage(obj);
+            
+        end
+        
+        function undoMask(obj, src, event)
+            
+            if ~isempty(obj.prevImage)
+                obj.maskData = obj.prevImage;            
+                updateImage(obj);
+            end
+            
+            
+        end
+        
+        
+        %--- Drawing functions ---%
+        
         function startDrawing(obj, src, event)
             
             if ~isempty(obj.maskData)
+                
+                %Store the previous state
+                obj.prevImage = obj.maskData;
+                
                 %Update the drawing
                 draw(obj);
                 
@@ -287,6 +392,8 @@ classdef MaskEditor < handle
         end
         
         function draw(obj, src, events)
+            %Draws pixels on mask image. Mouse coordinates are captured,
+            %then interpolated to get line.
             
             %Get mouse coordinates relative to the axes/figure position
             C = get(obj.handles_.axes1, 'CurrentPoint');
@@ -364,7 +471,7 @@ classdef MaskEditor < handle
                 set(obj.maskHandle, 'AlphaData', obj.maskData(:,:, obj.handles_.sldTime.Value));
                 
             else
-                disp('Outside image')
+                %disp('Outside image')
                 obj.lastPt = [];
             end
             
@@ -443,80 +550,6 @@ classdef MaskEditor < handle
             
         end
         
-        function saveMask(obj, src, event)
-            
-            switch src.Tag
-                
-                case 'mnuSaveAsMask'
-                    
-                    [maskFN, maskP] = uiputfile({'*.tif; *.tiff','TIF stack (*.tif; *.tiff)'},...
-                        'Save Mask As...');
-                    
-                    if maskFN == 0
-                        return;                        
-                    end
-                
-                    maskFN = fullfile(maskP, maskFN);
-                
-                case 'mnuOverwriteMask'
-                    maskFN = obj.maskPath;
-                
-            end
-            
-            imwrite(obj.maskData(:,:,1),maskFN,'compression','none');
-            
-            for iT = 2:size(obj.maskData,3)
-                imwrite(obj.maskData(:,:,iT),maskFN,'compression','none', 'writemode','append');                
-            end
-            
-            %Update the current mask path
-            obj.maskPath = maskFN;
-            
-            
-        end
-        
-        function drawCapsules(obj, src, event)
-            
-            %Get current data
-            
-            currMask = obj.maskData(:,:,obj.handles_.sldTime.Value);
-            
-            currMask = bwmorph(currMask, 'skel');
-            
-            props = regionprops(currMask,'MajorAxisLength','MinorAxisLength','Centroid','Orientation');
-            
-            %--- Draw code ---%
-            imgOut = zeros(size(obj.maskData(:,:,obj.handles_.sldTime.Value)));
-            
-            xx = 1:size(imgOut, 2);
-            yy = 1:size(imgOut, 1);
-            
-            [xx, yy] = meshgrid(xx,yy);
-            
-            for ii = 1:numel(props)
-                
-                center = props(ii).Centroid;
-                theta = props(ii).Orientation/180 * pi;
-                cellLen = floor(props(ii).MajorAxisLength);
-                cellWidth = floor(props(ii).MinorAxisLength);
-                
-                rotX = (xx - center(1)) * cos(theta) - (yy - center(2)) * sin(theta);
-                rotY = (xx - center(1)) * sin(theta) + (yy - center(2)) * cos(theta);
-                
-                %Plot the rectangle
-                imgOut(abs(rotX) < (cellLen/2 - cellWidth/2) & abs(rotY) < cellWidth/2) = ii;
-                
-                % %Plot circles on either end
-                imgOut(((rotX-(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
-                imgOut(((rotX+(cellLen/2 - cellWidth/2)).^2 + rotY.^2) < (cellWidth/2)^2 ) = ii;
-                
-            end
-            
-            obj.maskData(:,:,obj.handles_.sldTime.Value) = imgOut;
-            updateImage(obj);
-            
-        end
-        
         function togglePencil(obj, src, event)
            
             switch event.EventName
@@ -532,6 +565,10 @@ classdef MaskEditor < handle
                     set(obj.handles_.figure1, 'WindowButtonUpFcn', '');
             end
         end
+        
+        
+        
+        
     end
     
     

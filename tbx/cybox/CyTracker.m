@@ -38,6 +38,10 @@ classdef CyTracker < handle
         SpotBgSubtract logical = false;
         MinSpotArea double = 4;
         
+        ExportSpotMask logical = false;
+        UseSpotMask logical = false;
+        SpotMaskDir char = '';
+        
         %Track linking parameters
         LinkedBy char = 'PixelIdxList';
         LinkCalculation char = 'pxintersect';
@@ -464,6 +468,27 @@ classdef CyTracker < handle
                             imwrite(outputImg, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
                         end
                         
+                        %Export spot masks if set
+                        if obj.ExportSpotMask && ~isempty(obj.SpotChannel)
+                            spotOutputFN = fullfile(outputDir, sprintf('%s_series%d_spot.tif', currFN, iSeries));
+                            
+                            spotImg = bfr.getPlane(1, obj.SpotChannel, iT);
+                            
+                            spotMask = CyTracker.segmentSpots(spotImg, ...
+                                currCellMask, obj.SpotThreshold, ...
+                                obj.SpotBgSubtract, ...
+                                obj.SpotSegMode, obj.MinSpotArea);
+                            
+                            
+                            if iT == frameRange(1)
+                                imwrite(spotMask, spotOutputFN, 'compression', 'none');
+                            else
+                                imwrite(spotMask, spotOutputFN, 'writeMode', 'append', 'compression', 'none');
+                            end
+                            
+                        end
+                        
+                        
                         
                     end
                 end
@@ -535,8 +560,20 @@ classdef CyTracker < handle
                     
                     %Run spot detection if the SpotChannel property is set
                     if ~isempty(opts.SpotChannel)
+                        
                         dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
-                        dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea);
+                        
+                        if opts.UseSpotMask
+                            
+                            %TODO!!
+                            %Load the spot masks
+                            dotLabels = imread(fullfile(opts.SpotMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
+                            %dotLabels = labelmatrix(bwconncomp(mask(:,:,1))); 
+                        else
+                            %Run dot finding algorithm
+                            
+                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea);
+                        end
                     else 
                         dotLabels = [];
                     end
