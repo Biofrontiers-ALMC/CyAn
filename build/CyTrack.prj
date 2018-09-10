@@ -1,14 +1,14 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
   <configuration build-checksum="2908473156" file="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack.prj" location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
-    <param.appname>CyTrack (v1.0.6)</param.appname>
+    <param.appname>CyTrack (v1.1.1)</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
     <param.summary>Segmentation and Tracking code for Cyanobacteria</param.summary>
     <param.description>Please see wiki for usage instructions: https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home</param.description>
     <param.screenshot />
-    <param.version>1.0.6</param.version>
-    <param.output>${PROJECT_ROOT}\CyTrack (v1.0.6).mltbx</param.output>
+    <param.version>1.1.1</param.version>
+    <param.output>${PROJECT_ROOT}\CyTrack (v1.1.1).mltbx</param.output>
     <param.products.name>
       <item>MATLAB</item>
       <item>Computer Vision System Toolbox</item>
@@ -20,13 +20,14 @@
       <item>60</item>
     </param.products.id>
     <param.products.version>
-      <item>9.3</item>
-      <item>8.0</item>
-      <item>3.5.6</item>
+      <item>9.4</item>
+      <item>8.1</item>
+      <item>3.5.7</item>
     </param.products.version>
     <param.platforms />
     <param.guid>11dead0a-728c-4a7b-b238-1680d6efddb0</param.guid>
     <param.exclude.filters />
+    <param.exclude.pcodedmfiles>true</param.exclude.pcodedmfiles>
     <param.examples />
     <param.demosxml />
     <param.apps />
@@ -35,6 +36,14 @@
     <param.getting.started.guide />
     <param.matlabpath.excludes />
     <param.javaclasspath.excludes />
+    <param.exported.on.package>false</param.exported.on.package>
+    <param.release.start />
+    <param.release.end />
+    <param.release.current.only>false</param.release.current.only>
+    <param.compatiblity.windows>true</param.compatiblity.windows>
+    <param.compatiblity.macos>true</param.compatiblity.macos>
+    <param.compatiblity.linux>true</param.compatiblity.linux>
+    <param.compatiblity.matlabonline>true</param.compatiblity.matlabonline>
     <unset>
       <param.authnamewatermark />
       <param.email />
@@ -43,6 +52,7 @@
       <param.output />
       <param.platforms />
       <param.exclude.filters />
+      <param.exclude.pcodedmfiles />
       <param.examples />
       <param.demosxml />
       <param.apps />
@@ -51,6 +61,14 @@
       <param.getting.started.guide />
       <param.matlabpath.excludes />
       <param.javaclasspath.excludes />
+      <param.exported.on.package />
+      <param.release.start />
+      <param.release.end />
+      <param.release.current.only />
+      <param.compatiblity.windows />
+      <param.compatiblity.macos />
+      <param.compatiblity.linux />
+      <param.compatiblity.matlabonline />
     </unset>
     <fileset.rootdir>
       <file>D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\tbx</file>
@@ -60,21 +78,24 @@
     </fileset.rootfiles>
     <fileset.depfun.included />
     <fileset.depfun.excluded>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\bfmatlab\bfGetPlane.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\bfmatlab\bfGetReader.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\bfmatlab\private\is_octave.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.3)\code\BioformatsImage\BioformatsImage.m</file>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackLinker.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\bfmatlab\bfGetPlane.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\bfmatlab\bfGetReader.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\bfmatlab\private\is_octave.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\BioformatsImage.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Linear Assignment Cell Tracker v1.0.4\code\lap-tracker\TrackData.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Linear Assignment Cell Tracker v1.0.4\code\lap-tracker\TrackDataArray.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Linear Assignment Cell Tracker v1.0.4\code\lap-tracker\TrackLinker.m</file>
+      <file>D:\Jian\Documents\MATLAB\showoverlay.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack (v1.0.6).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.0.6).mltbx</file>
+      <file location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack (v1.1.1).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.1.1).mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
-      <root>C:\Program Files\MATLAB\R2017b</root>
+      <root>C:\Program Files\MATLAB\R2018a</root>
       <toolboxes />
     </matlab>
     <platform>

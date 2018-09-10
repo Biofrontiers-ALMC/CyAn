@@ -986,6 +986,40 @@ classdef CyTracker < handle
                         cellLabels = mask;
                     end
                     
+                case 'cy5'
+                    
+                    %Threshold
+                    cellImage = imsharpen(cellImage,'Amount', 2);
+                    
+                    %Get a threshold
+                    [nCnts, binEdges] = histcounts(cellImage(:),linspace(0, double(max(cellImage(:))), 150));
+                    binCenters = diff(binEdges) + binEdges(1:end-1);
+                    
+                    %Find the peak background
+                    [bgPk, bgPkLoc] = max(nCnts);
+                    
+                    %Find point where counts drop to fraction of peak
+                    thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
+                    thLoc = thLoc + bgPkLoc;
+                    
+                    thLvl = binCenters(thLoc);
+                                     
+                    mask = cellImage > thLvl;
+                    
+                    mask = activecontour(cellImage, mask);
+                    
+                    dd = -bwdist(~mask);
+                    dd(~mask) = -Inf;
+                    
+                    dd = imhmin(dd, maxCellminDepth);
+                    
+                    LL = watershed(dd);
+                    LL = imclearborder(LL);
+                    
+                    mask(LL == 0) = 0;
+                    %showoverlay(cellImage, bwperim(mask))
+                    
+                    cellLabels = mask;
             end
             
             
