@@ -350,10 +350,47 @@ classdef CyTracker < handle
             %
             %  EXPORTMASKS(PT, fileList, outputDir) where fileList is a
             %  cell array of strings containing paths to the file, and
-            %  outputDir is the path to save the masks to.           
+            %  outputDir is the path to save the masks to.
+            %
+            %  EXPORTMASKS(PT, ..., 'spotonly') will only save the spot
+            %  masks.
+            %
+            %  EXPORTMASKS(PT, ..., 'cellonly') will only save the cell
+            %  masks.
+            %
+            %  EXPORTMASKS(PT, ..., 'all') will only save both spot and
+            %  cell masks (default behavior).
             
-            %Validate the inputs
-            if isempty(varargin)
+            exportType = 'all';
+            exportRaw = false;
+            outputDir = 0;
+            filename = '';
+            
+            %Parse optional inputs
+            if ~isempty(varargin)
+                for ii = 1:numel(varargin)
+                    
+                    switch lower(varargin{ii})
+                        
+                        case {'spotonly', 'cellonly', 'all'}
+                            exportType = lower(varargin{ii});
+                            
+                        case 'raw'
+                            exportRaw = true;
+                            
+                        otherwise
+                            
+                            if isfolder(varargin{ii}) && (outputDir == 0)
+                                outputDir = varargin{ii};
+                            elseif (iscell(varargin{ii}) || exist(varargin{ii},'file')) && isempty(filename)
+                                filename = varargin{ii};
+                            end
+                            
+                    end
+                end
+            end
+            
+            if isempty(filename)
                 [fname, fpath] = uigetfile({'*.nd2','ND2 file (*.nd2)'},...
                     'Select a file','multiSelect','on');
                 
@@ -370,36 +407,12 @@ classdef CyTracker < handle
                 else
                     filename = {fullfile(fpath,fname)};
                 end
-                
-            else
-                if exist(varargin{1},'file')
-                    filename = {varargin{1}};
-                else
-                    error('CyTracker:processFiles:FileDoesNotExist',...
-                        'Could not find file %s.',varargin{1});
-                end
-                varargin(1) = [];
+            elseif ~iscell(filename)
+                filename = {filename};                
             end
                         
-            exportRaw = false;
-            
-            while ~isempty(varargin)                
-                
-                if strcmpi(varargin{1}, 'raw')
-                    exportRaw = true;
-                else
-                    outputDir = varargin{2};
-                    if ~exist(outputDir,'dir')
-                        mkdir(outputDir)
-                    end
-                end
-                
-                varargin(1) = [];
-            
-            end
-            
             %Prompt user for a directory to save output files to
-            if ~exist('outputDir', 'var')
+            if outputDir == 0
                 startPath = fileparts(filename{1});
                 
                 outputDir = uigetdir(startPath, 'Select output directory');
@@ -409,7 +422,6 @@ classdef CyTracker < handle
                     return;
                 end
             end
-            
             
             for iFile = 1:numel(filename)                
                 
@@ -452,24 +464,28 @@ classdef CyTracker < handle
                             
                         end
                         
-                        %Normalize the image and convert to uint8
-                        imgToExport = bfr.getPlane(1, 'Cy5', iT);
-                        outputImg = uint8(double(imgToExport)./double(max(imgToExport(:))) .* 255);
-                                                
-                        %Write to TIFF stack
-                        maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_masks.tif', currFN, iSeries));
-                        imageOutputFN = fullfile(outputDir, sprintf('%s_series%d_cy5.tif', currFN, iSeries));
-                    
-                        if iT == frameRange(1)
-                            imwrite(outputMask, maskOutputFN, 'compression', 'none');
-                            imwrite(outputImg, imageOutputFN, 'compression', 'none');
-                        else
-                            imwrite(outputMask, maskOutputFN, 'writeMode', 'append', 'compression', 'none');
-                            imwrite(outputImg, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
+                        if ismember(exportType, {'cellonly', 'all'})
+                            
+                            %Normalize the image and convert to uint8
+                            imgToExport = bfr.getPlane(1, 'Cy5', iT);
+                            outputImg = uint8(double(imgToExport)./double(max(imgToExport(:))) .* 255);
+                            
+                            %Write to TIFF stack
+                            maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_masks.tif', currFN, iSeries));
+                            imageOutputFN = fullfile(outputDir, sprintf('%s_series%d_cy5.tif', currFN, iSeries));
+                            
+                            if iT == frameRange(1)
+                                imwrite(outputMask, maskOutputFN, 'compression', 'none');
+                                imwrite(outputImg, imageOutputFN, 'compression', 'none');
+                            else
+                                imwrite(outputMask, maskOutputFN, 'writeMode', 'append', 'compression', 'none');
+                                imwrite(outputImg, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
+                            end
+                            
                         end
                         
-                        %Export spot masks if set
-                        if obj.ExportSpotMask && ~isempty(obj.SpotChannel)
+                        if ismember(exportType, {'spotonly', 'all'}) && ~isempty(obj.SpotChannel)
+     
                             spotOutputFN = fullfile(outputDir, sprintf('%s_series%d_spot.tif', currFN, iSeries));
                             
                             spotImg = bfr.getPlane(1, obj.SpotChannel, iT);
@@ -485,10 +501,8 @@ classdef CyTracker < handle
                             else
                                 imwrite(spotMask, spotOutputFN, 'writeMode', 'append', 'compression', 'none');
                             end
-                            
+                        
                         end
-                        
-                        
                         
                     end
                 end
