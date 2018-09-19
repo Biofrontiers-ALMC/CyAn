@@ -43,6 +43,8 @@ classdef MaskEditor < handle
             
             set(obj.handles_.mnuDrawCapsules, 'callback', @(src, event) drawCapsules(obj, src, event));
             
+            set(obj.handles_.pbToggleMask, 'Callback', @(src, event) hideMask(obj, src, event));
+            
             %--- Image sliders for z-position, channel, and time point ---%
             set(obj.handles_.sldZPos,  'callback', @(src,event) updateSlider(obj, src, event));
             set(obj.handles_.sldChannel,  'callback', @(src,event) updateSlider(obj, src, event));
@@ -158,6 +160,10 @@ classdef MaskEditor < handle
             obj.handles_.mnuSaveAsMask.Enable = 'on';
             
             obj.handles_.mnuFunctions.Enable = 'on';
+            obj.handles_.pbToggleMask.Enable = 'on';
+
+            
+            
         end
         
         function updateImage(obj, src, events)
@@ -372,6 +378,18 @@ classdef MaskEditor < handle
             
         end
         
+        function hideMask(obj, src, event)
+            
+            if src.Value
+                
+                set(obj.maskHandle, 'AlphaData', false(size(obj.baseImgData)));
+            else
+                
+                set(obj.maskHandle, 'AlphaData', obj.maskData(:,:,obj.handles_.sldTime.Value));
+            end
+            
+        end
+        
         
         %--- Drawing functions ---%
         
@@ -565,8 +583,7 @@ classdef MaskEditor < handle
                     set(obj.handles_.figure1, 'WindowButtonUpFcn', '');
             end
         end
-        
-        
+         
         
         
     end

@@ -1081,10 +1081,10 @@ classdef CyTracker < handle
                     
                 case {'dog', 'diffgaussian'}
                     %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
-                    expSpotDia = 3;
+                    expSpotDia = 2;
                     
                     sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
-                    sigma2 = sqrt(2) * sigma1;
+                    sigma2 = sqrt(2) * sigma1;                    
                     
                     g1 = imgaussfilt(imgInFilt, sigma1);
                     g2 = imgaussfilt(imgInFilt, sigma2);
