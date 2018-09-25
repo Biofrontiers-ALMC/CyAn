@@ -23,9 +23,12 @@ classdef CyTracker < handle
         UseMasks logical = false;
         InputMaskDir char = '';
                 
+        RegisterImages = false;
+        ChannelToRegister = 'Cy5';
+        
         %Segmentation options
         ChannelToSegment char = '';
-        SegMode char = 'Brightfield';
+        SegMode char = '';
         ThresholdLevel double = 1.4;
         
         MaxCellMinDepth double = 2;
@@ -33,12 +36,11 @@ classdef CyTracker < handle
         
         %Spot detection options
         SpotChannel char = '';
-        SpotSegMode char = 'localmax';
+        SpotSegMode char = '';
         SpotThreshold double = 2.5;
         SpotBgSubtract logical = false;
         MinSpotArea double = 4;
         
-        ExportSpotMask logical = false;
         UseSpotMask logical = false;
         SpotMaskDir char = '';
         
@@ -486,7 +488,7 @@ classdef CyTracker < handle
                         
                         if ismember(exportType, {'spotonly', 'all'}) && ~isempty(obj.SpotChannel)
      
-                            spotOutputFN = fullfile(outputDir, sprintf('%s_series%d_spot.tif', currFN, iSeries));
+                            spotOutputFN = fullfile(outputDir, sprintf('%s_series%d_spotMask.tif', currFN, iSeries));
                             
                             spotImg = bfr.getPlane(1, obj.SpotChannel, iT);
                             
@@ -553,6 +555,9 @@ classdef CyTracker < handle
                 %Set the image series number
                 bfReader.series = iSeries;
                 
+                %Default value for the pixel shift to register images
+                pxShift = [];
+                
                 %--- Start tracking ---%
                 
                 for iT = frameRange
@@ -560,6 +565,18 @@ classdef CyTracker < handle
                     %-- v2.0 TODO: Move these functions out --%
                     %Segment the cells
                     imgToSegment = bfReader.getPlane(1, opts.ChannelToSegment, iT);
+                    
+                    %Register the image using the specified channel
+                    if opts.RegisterImages
+                        regImg = bfReader.getPlane(1, opts.ChannelToRegister, iT);
+                        if exist('prevImage', 'var')
+                            pxShift = CyTracker.xcorrreg(prevImage, regImg);
+                            %corrImg_debug = CyTracker.shiftimg(regImg, pxShift);
+                            imgToSegment = CyTracker.shiftimg(imgToSegment, pxShift);
+                            regImg = CyTracker.shiftimg(regImg, pxShift);
+                        end
+                        prevImage = regImg;
+                    end
                     
                     if ~opts.UseMasks
                         %Segment the cells
@@ -569,23 +586,36 @@ classdef CyTracker < handle
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
+                        
+                        %Shift the mask if registration was set
+                        if ~isempty(pxShift)
+                            mask = CyTracker.shiftimg(mask, pxShift);
+                        end
+                        
                         cellLabels = labelmatrix(bwconncomp(mask(:,:,1)));
                     end
                     
                     %Run spot detection if the SpotChannel property is set
                     if ~isempty(opts.SpotChannel)
                         
-                        dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
-                        
                         if opts.UseSpotMask
-                            
-                            %TODO!!
                             %Load the spot masks
-                            dotLabels = imread(fullfile(opts.SpotMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
-                            %dotLabels = labelmatrix(bwconncomp(mask(:,:,1))); 
-                        else
-                            %Run dot finding algorithm
+                            dotLabels = imread(fullfile(opts.SpotMaskDir, sprintf('%s_series%d_spotMask.tif',fname, iSeries)),'Index', iT);
                             
+                            if ~isempty(pxShift)
+                                dotLabels = CyTracker.shiftimg(dotLabels, pxShift);
+                            end
+                        else
+                            
+                            dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
+                            
+                            %Shift the dot image if necessary for
+                            %registration
+                            if ~isempty(pxShift)
+                                dotImg = CyTracker.shiftimg(dotImg, pxShift);
+                            end
+                            
+                            %Run dot finding algorithm
                             dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea);
                         end
                     else 
@@ -593,7 +623,7 @@ classdef CyTracker < handle
                     end
                     
                     %Run the measurement script
-                    cellData = CyTracker.measure(cellLabels, dotLabels, bfReader, iT);
+                    cellData = CyTracker.measure(cellLabels, dotLabels, bfReader, iT, pxShift);
                     
                     %-- END v2.0 TODO: Move these functions out --%
                     
@@ -698,8 +728,8 @@ classdef CyTracker < handle
             
         end
         
-        function cellData = measure(cellLabels, spotLabels, bfReader, iT)
-            %measure  Get cell data
+        function cellData = measure(cellLabels, spotLabels, bfReader, iT, pxShift)
+            %MEASURE  Get cell data
             %
             %  
             
@@ -713,6 +743,10 @@ classdef CyTracker < handle
             %Get intensity data. Names: PropertyChanName
             for iC = 1:bfReader.sizeC
                 currImage = bfReader.getPlane(1, iC, iT);
+                
+                if ~isempty(pxShift)
+                    currImage = CyTracker.shiftimg(currImage, pxShift);
+                end                
                 
                 for iCell = 1:numel(cellData)
                     cellData(iCell).(['TotalInt',regexprep(bfReader.channelNames{iC},'[^\w\d]*','')]) = ...
@@ -1439,6 +1473,54 @@ classdef CyTracker < handle
             end
             
         end
+       
+        
+        function pxShift = xcorrreg(refImg, movedImg)
+            %REGISTERIMG  Register two images using cross-correlation
+            %
+            %  I = xcorrreg(R, M) registers two images by calculating the
+            %  cross-correlation between them. R is the reference or stationary image,
+            %  and M is the moved image.
+            %
+            %  Note: This algorithm only works for translational shifts, and will not
+            %  work for rotational shifts or image resizing.
+            
+            %Compute the cross-correlation of the two images
+            crossCorr = ifft2((fft2(refImg) .* conj(fft2(movedImg))));
+            
+            %Find the location in pixels of the maximum correlation
+            [xMax, yMax] = find(crossCorr == max(crossCorr(:)));
+            
+            %Compute the relative shift in pixels
+            Xoffset = fftshift(-size(refImg,1)/2:(size(refImg,1)/2 - 1));
+            Yoffset = fftshift(-size(refImg,2)/2:(size(refImg,2)/2 - 1));
+            
+            pxShift = round([Xoffset(xMax), Yoffset(yMax)]);
+            
+        end
+        
+        function corrImg = shiftimg(imgIn, pxShift)
+            
+            %Translate the moved image to match
+            corrImg = circshift(imgIn, pxShift);
+            
+%             shiftedVal = prctile(imgIn(:), 5);
+%             
+%             %Delete the shifted regions
+%             if pxShift(1) > 0
+%                 corrImg(1:pxShift(1),:) = shiftedVal;
+%             elseif pxShift(1) < 0
+%                 corrImg(end+pxShift(1):end,:) = shiftedVal;
+%             end
+%             
+%             if pxShift(2) > 0
+%                 corrImg(:,1:pxShift(2)) = shiftedVal;
+%             elseif pxShift(2) < 0
+%                 corrImg(:,end+pxShift(2):end) = shiftedVal;
+%             end
+            
+        end
+        
         
     end
     
