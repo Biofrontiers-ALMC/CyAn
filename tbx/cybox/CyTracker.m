@@ -44,6 +44,7 @@ classdef CyTracker < handle
         UseSpotMask logical = false;
         SpotMaskDir char = '';
         
+        DoGSpotDiameter double = 2;
         SpotErodePx double = 0;
         
         %Track linking parameters
@@ -557,9 +558,6 @@ classdef CyTracker < handle
                 %Set the image series number
                 bfReader.series = iSeries;
                 
-                %Default value for the pixel shift to register images
-                pxShift = [];
-                
                 %--- Start tracking ---%
                 
                 for iT = frameRange
@@ -567,18 +565,6 @@ classdef CyTracker < handle
                     %-- v2.0 TODO: Move these functions out --%
                     %Segment the cells
                     imgToSegment = bfReader.getPlane(1, opts.ChannelToSegment, iT);
-                    
-                    %Register the image using the specified channel
-                    if opts.RegisterImages
-                        regImg = bfReader.getPlane(1, opts.ChannelToRegister, iT);
-                        if exist('prevImage', 'var')
-                            pxShift = CyTracker.xcorrreg(prevImage, regImg);
-                            %corrImg_debug = CyTracker.shiftimg(regImg, pxShift);
-                            imgToSegment = CyTracker.shiftimg(imgToSegment, pxShift);
-                            regImg = CyTracker.shiftimg(regImg, pxShift);
-                        end
-                        prevImage = regImg;
-                    end
                     
                     if ~opts.UseMasks
                         %Segment the cells
@@ -588,11 +574,6 @@ classdef CyTracker < handle
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
-                        
-                        %Shift the mask if registration was set
-                        if ~isempty(pxShift)
-                            mask = CyTracker.shiftimg(mask, pxShift);
-                        end
                         
                         cellLabels = labelmatrix(bwconncomp(mask(:,:,1)));
                     end
@@ -611,19 +592,31 @@ classdef CyTracker < handle
                             
                             dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
                             
-                            %Shift the dot image if necessary for
-                            %registration
-                            if ~isempty(pxShift)
-                                dotImg = CyTracker.shiftimg(dotImg, pxShift);
-                            end
-                            
                             %Run dot finding algorithm
-                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea);
+                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea, opts.DoGSpotDiameter, opts.SpotErodePx);
                         end
                     else 
                         dotLabels = [];
                     end
-                    
+                                        
+                    %If image registration is specified, compute the pixel
+                    %shift
+                    pxShift = [];
+                    if opts.RegisterImages
+                        pxShift = [0 0];
+                        %Get the image to register against. Works best for
+                        %Cy5 fluorescence channel.
+                        regImg = bfReader.getPlane(1, opts.ChannelToRegister, iT);
+                        if exist('prevImage', 'var')
+                            pxShift = CyTracker.xcorrreg(prevImage, regImg);
+                            
+                            regImg = CyTracker.shiftimg(regImg, pxShift);
+                        end
+                        
+                        %Store the image as a reference
+                        prevImage = regImg;
+                    end
+                                                            
                     %Run the measurement script
                     cellData = CyTracker.measure(cellLabels, dotLabels, bfReader, iT, pxShift);
                     
@@ -644,10 +637,17 @@ classdef CyTracker < handle
                             trackLinker = trackLinker.setImgSize([bfReader.height, bfReader.width]);
                             
                         else
+                            
+%                             if ~isempty(pxShift)
+%                                 trackLinker.LinkDriftCorrection = pxShift;
+%                             end
+%                             
                             try
                                 %Link data to existing tracks
                                 trackLinker = trackLinker.assignToTrack(iT, cellData);
                             catch ME
+                                fprintf('Error linking at frame %d\n', iT);
+                                
                                 saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
                                 if strcmpi(saveData,'y')
                                     trackArray = trackLinker.getTrackArray; %#ok<NASGU>
@@ -733,11 +733,13 @@ classdef CyTracker < handle
         function cellData = measure(cellLabels, spotLabels, bfReader, iT, pxShift)
             %MEASURE  Get cell data
             %
-            %  
+            %  S = MEASURE(CELL_LABELS, SPOT_LABELS, BFREADER, FRAME,
+            %  PXSHIFT)
             
             %Get standard data
             cellData = regionprops(cellLabels, ...
-                'Area','Centroid','PixelIdxList','MajorAxisLength', 'MinorAxisLength','Orientation');
+                'Area','Centroid','PixelIdxList','MajorAxisLength',...
+                'MinorAxisLength','Orientation');
             
             %Remove non-existing data
             cellData([cellData.Area] ==  0) = [];
@@ -745,10 +747,6 @@ classdef CyTracker < handle
             %Get intensity data. Names: PropertyChanName
             for iC = 1:bfReader.sizeC
                 currImage = bfReader.getPlane(1, iC, iT);
-                
-                if ~isempty(pxShift)
-                    currImage = CyTracker.shiftimg(currImage, pxShift);
-                end                
                 
                 for iCell = 1:numel(cellData)
                     cellData(iCell).(['TotalInt',regexprep(bfReader.channelNames{iC},'[^\w\d]*','')]) = ...
@@ -761,7 +759,7 @@ classdef CyTracker < handle
                         spotData = regionprops(currSpotLabels,'Centroid','PixelIdxList');
                         
                         cellData(iCell).NumSpots = numel(spotData);
-                        cellData(iCell).NormSpotDist = [];%zeros(1,numel(spotData)*2);
+                        cellData(iCell).NormSpotDist = [];
                         cellData(iCell).MeanSpotInt = zeros(1,numel(spotData));
                         
                         for iSpots = 1:numel(spotData)
@@ -772,19 +770,63 @@ classdef CyTracker < handle
                             %Unit vector along cell axis
                             unitVec = [cos((cellData(iCell).Orientation/180) * pi), sin((cellData(iCell).Orientation/180) * pi)];
                             
-                            %Calculate the projections
+                            %Calculate the projection of the spot along the
+                            %cell axis
                             projLen = (diffVec(1) * unitVec(1) + diffVec(2) * unitVec(2))./(cellData(iCell).MajorAxisLength/2);
-                            %projWidth = (sqrt(sum((diffVec - projLen * unitVec).^2)))./(cellData(iCell).MinorAxisLength/2);
-                                
-                            %THIS VALUE IS INCORRECT
-                            %cellData(iCell).NormSpotDist((2*(iSpots - 1) + 1):(2* iSpots)) = [normSpotDistX, normSpotDistY]./cellData(iCell).MajorAxisLength;
-                            %cellData(iCell).NormSpotDist((2*(iSpots - 1) + 1):(2* iSpots)) = [projLen, projWidth];
+                                 
                             cellData(iCell).NormSpotDist(iSpots) = projLen;
                             cellData(iCell).MeanSpotInt(iSpots) = mean(currImage(spotData(iSpots).PixelIdxList));
                         end
                         
                     end
                 end
+
+   
+
+            end
+            
+            
+            %If the image was registered, apply a correction to the
+            %PixelIdxList values for tracking code to work correctly
+            if ~isempty(pxShift)
+                
+                cellLabelFinal = zeros(size(cellLabels));
+                for iData = 1:numel(cellData)
+                    cellLabelFinal(cellData(iData).PixelIdxList) = iData;                    
+                end
+                
+                
+                %Pad the array to ensure that the registered images
+                %will not wrap around
+                cellLabels_padded = padarray(cellLabelFinal, size(cellLabelFinal), 0, 'both');
+                
+                cellLabels_padded = CyTracker.shiftimg(cellLabels_padded, pxShift);
+                
+                regPxList = regionprops(cellLabels_padded, 'PixelIdxList', 'Area');
+                
+                for iData = 1:numel(cellData)
+                    
+                    cellData(iData).RegisteredPxInd = regPxList(iData).PixelIdxList;
+                    %cellData(iData).RegCentroid = cellData(iData).Centroid - [pxShift(2) pxShift(1)];
+                end
+                
+%                 %DEBUG ONLY
+%                 imshow(cellLabels_padded, [])
+%                 keyboard
+                
+                %                     %To do this, we have to convert the PixelIdxList
+                %                     %values to subindex values - doens't work with negative
+                %                     %values
+                %                     for iData = 1:numel(cellData)
+                %
+                %                         [rowSub, colSub] = ind2sub([bfReader.height, bfReader.width], cellData(iData).PixelIdxList);
+                %
+                %                         rowSub = rowSub - pxShift(2);
+                %                         colSub = colSub - pxShift(1);
+                %
+                %                         cellData(iData).RegisteredPxInd = sub2ind([bfReader.height, bfReader.width], rowSub, colSub);
+                %                     end
+                
             end
             
         end
@@ -1079,12 +1121,12 @@ classdef CyTracker < handle
             
         end
         
-        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode, minSpotArea)
+        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode, minSpotArea, expSpotDia, dogerodepx)
             %SEGMENTSPOTS  Finds spots
                     
             %Convert the carboxysome image to double
             imgInFilt = double(imgIn);
-                    
+            
             switch lower(segMode)
                 
                 case 'localmax'
@@ -1131,7 +1173,6 @@ classdef CyTracker < handle
                     
                 case {'dog', 'diffgaussian'}
                     %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
-                    expSpotDia = 2;
                     
                     sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
                     sigma2 = sqrt(2) * sigma1;                    
@@ -1152,7 +1193,8 @@ classdef CyTracker < handle
                     
                     %Segment the spots
                     spotMask = dogImg > spotBg;
-                    spotMask(~(cellLabels >0)) = false;
+                    spotMask(~cellLabels) = false;
+                    %spotMask(~(cellLabels >0)) = false;
                     
 %                     %Separate the spots
 %                     locMax = imregionalmax(dogImg,8);
@@ -1162,7 +1204,7 @@ classdef CyTracker < handle
                     spotMask = bwareaopen(spotMask, minSpotArea);
 
                     dd = -bwdist(~spotMask);
-                    
+                    dd = imhmin(dd, 0.7);
                     
                     LL = watershed(dd);
                     
@@ -1198,7 +1240,11 @@ classdef CyTracker < handle
                 case 'dogerode'
                     
                     %Hack to remove spots at corner of image
-                    cellLabels = imerode(cellLabels, strel('disk', opts.SpotErodePx));
+                    cellMask = cellLabels > 0;
+                    cellMask = imdilate(cellMask, strel('disk', 1));
+                    cellMask = imfill(cellMask, 'holes');
+                    cellMask = imerode(cellMask, strel('disk',dogerodepx));
+%                    cellLabels = imerode(cellLabels, strel('disk', dogSpotPx));
                     
                     %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
                     expSpotDia = 2;
@@ -1217,12 +1263,11 @@ classdef CyTracker < handle
                     xBins = diff(xBins) + xBins(1:end-1);
                     
                     gf = fit(xBins', nCnts', 'gauss1');
-                    
                     spotBg = gf.b1 + spotThreshold .* gf.c1;
                     
                     %Segment the spots
                     spotMask = dogImg > spotBg;
-                    spotMask(~(cellLabels >0)) = false;
+                    spotMask(~cellMask) = false;
                     
                     spotMask = bwareaopen(spotMask, minSpotArea);
                     
@@ -1231,6 +1276,7 @@ classdef CyTracker < handle
                     LL = watershed(dd);
                     
                     spotMask(LL == 0) = false;
+                    showoverlay(imgIn, spotMask, 'Opacity', 50)
 
             end
         end
@@ -1462,8 +1508,14 @@ classdef CyTracker < handle
                     
                     trackCentroid = cat(2,currTrack.Data.Centroid);
                     
-                    imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
-                        'BoxOpacity', 0,'TextColor','yellow');
+                    if isfield(currTrack.Data, 'RegCentroid')
+                        imgOut = insertText(imgOut, currTrack.Data(end).RegCentroid, iTrack,...
+                            'BoxOpacity', 0,'TextColor','yellow');
+                    else
+                        imgOut = insertText(imgOut, currTrack.Data(end).Centroid, iTrack,...
+                            'BoxOpacity', 0,'TextColor','yellow');
+                    end
+                    
                     
                     if showTracks
                         if iT > currTrack.FirstFrame
