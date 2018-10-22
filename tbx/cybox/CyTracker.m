@@ -1174,6 +1174,17 @@ classdef CyTracker < handle
                 case {'dog', 'diffgaussian'}
                     %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
                     
+                    
+                    if dogerodepx > 0
+                        
+                        %Hack to remove spots at corner of image
+                        cellMask = cellLabels > 0;
+                        cellMask = imdilate(cellMask, strel('disk', 1));
+                        cellMask = imfill(cellMask, 'holes');
+                        cellLabels = imerode(cellMask, strel('disk',dogerodepx));
+                        
+                    end
+                    
                     sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
                     sigma2 = sqrt(2) * sigma1;                    
                     
@@ -1194,25 +1205,15 @@ classdef CyTracker < handle
                     %Segment the spots
                     spotMask = dogImg > spotBg;
                     spotMask(~cellLabels) = false;
-                    %spotMask(~(cellLabels >0)) = false;
-                    
-%                     %Separate the spots
-%                     locMax = imregionalmax(dogImg,8);
-%                     locMax(~(cellLabels > 0)) = false;
-                    
-            
+           
                     spotMask = bwareaopen(spotMask, minSpotArea);
 
                     dd = -bwdist(~spotMask);
-                    %dd = imhmin(dd, 0.7);
                     
                     LL = watershed(dd);
                     
                     spotMask(LL == 0) = false;
-                    
-                    
-                    
-%                     
+
 %                     %Refine by CNR
 %                     spotCC = bwconncomp(spotMask);
 %                     for spotIdx = 1:spotCC.NumObjects
@@ -1227,56 +1228,6 @@ classdef CyTracker < handle
 %                         
 %                         
 %                     end
-%        
-                    
-                     
-%                     imgOut = showoverlay(dogImg, spotMask);
-%                     showoverlay(imgOut, locMax, 'Color', [1 0 1]);
-%                     
-%                     showoverlay(dogImg, spotMask, 'Opacity', 30)
-%                     
-%                     keyboard
-
-                case 'dogerode'
-                    
-                    %Hack to remove spots at corner of image
-                    cellMask = cellLabels > 0;
-                    cellMask = imdilate(cellMask, strel('disk', 1));
-                    cellMask = imfill(cellMask, 'holes');
-                    cellMask = imerode(cellMask, strel('disk',dogerodepx));
-%                    cellLabels = imerode(cellLabels, strel('disk', dogSpotPx));
-                    
-                    %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
-                    expSpotDia = 2;
-                    
-                    sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
-                    sigma2 = sqrt(2) * sigma1;
-                    
-                    g1 = imgaussfilt(imgInFilt, sigma1);
-                    g2 = imgaussfilt(imgInFilt, sigma2);
-                    
-                    dogImg = imcomplement(g2 - g1);
-                    
-                    %bgVal = mean(dogImg(:));
-                    
-                    [nCnts, xBins] = histcounts(dogImg(:));
-                    xBins = diff(xBins) + xBins(1:end-1);
-                    
-                    gf = fit(xBins', nCnts', 'gauss1');
-                    spotBg = gf.b1 + spotThreshold .* gf.c1;
-                    
-                    %Segment the spots
-                    spotMask = dogImg > spotBg;
-                    spotMask(~cellMask) = false;
-                    
-                    spotMask = bwareaopen(spotMask, minSpotArea);
-                    
-                    dd = -bwdist(~spotMask);
-                                        
-                    LL = watershed(dd);
-                    
-                    spotMask(LL == 0) = false;
-                    showoverlay(imgIn, spotMask, 'Opacity', 50)
 
             end
         end
