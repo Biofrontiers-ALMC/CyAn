@@ -1204,7 +1204,7 @@ classdef CyTracker < handle
                     spotMask = bwareaopen(spotMask, minSpotArea);
 
                     dd = -bwdist(~spotMask);
-                    dd = imhmin(dd, 0.7);
+                    %dd = imhmin(dd, 0.7);
                     
                     LL = watershed(dd);
                     
