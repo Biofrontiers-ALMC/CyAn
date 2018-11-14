@@ -26,6 +26,8 @@ classdef CyTracker < handle
         RegisterImages = false;
         ChannelToRegister = 'Cy5';
         
+        SaveMasks = false;
+        
         %Segmentation options
         ChannelToSegment char = '';
         SegMode char = '';
@@ -46,6 +48,8 @@ classdef CyTracker < handle
         
         DoGSpotDiameter double = 2;
         SpotErodePx double = 0;
+        
+        SpotCNR = 1.5;
         
         %Track linking parameters
         LinkedBy char = 'PixelIdxList';
@@ -371,6 +375,9 @@ classdef CyTracker < handle
             outputDir = 0;
             filename = '';
             
+            %TODO: Add cell masks
+            opts = getOptions(obj);
+            
             %Parse optional inputs
             if ~isempty(varargin)
                 for ii = 1:numel(varargin)
@@ -496,10 +503,7 @@ classdef CyTracker < handle
                             spotImg = bfr.getPlane(1, obj.SpotChannel, iT);
                             
                             spotMask = CyTracker.segmentSpots(spotImg, ...
-                                currCellMask, obj.SpotThreshold, ...
-                                obj.SpotBgSubtract, ...
-                                obj.SpotSegMode, obj.MinSpotArea);
-                            
+                                currCellMask, opts);
                             
                             if iT == frameRange(1)
                                 imwrite(spotMask, spotOutputFN, 'compression', 'none');
@@ -571,6 +575,17 @@ classdef CyTracker < handle
                         cellLabels = CyTracker.getCellLabels(imgToSegment, ...
                             opts.ThresholdLevel, opts.SegMode,...
                             opts.MaxCellMinDepth, opts.CellAreaLim);
+                        
+                        if opts.SaveMasks
+                            if iT == frameRange(1)
+                                imwrite(cellLabels, [saveFN, 'cellMask.tif'], 'Compression', 'None');
+                            else
+                                imwrite(cellLabels, [saveFN, 'cellMask.tif'], ...
+                                    'Compression', 'None', 'WriteMode', 'append');
+                            end
+                        end
+                        
+                        
                     else
                         %Load the masks
                         mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
@@ -588,12 +603,21 @@ classdef CyTracker < handle
                             if ~isempty(pxShift)
                                 dotLabels = CyTracker.shiftimg(dotLabels, pxShift);
                             end
-                        else
-                            
+                        else 
                             dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
                             
                             %Run dot finding algorithm
-                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts.SpotThreshold, opts.SpotBgSubtract, opts.SpotSegMode, opts.MinSpotArea, opts.DoGSpotDiameter, opts.SpotErodePx);
+                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
+                            
+                            if opts.SaveMasks
+                                if iT == frameRange(1)
+                                    imwrite(dotLabels, [saveFN, 'spotMask.tif'], ...
+                                        'Compression', 'None', 'WriteMode', 'append');
+                                else
+                                    imwrite(dotLabels, [saveFN, 'spotMask.tif'], ...
+                                        'Compression', 'None', 'WriteMode', 'append');
+                                end
+                            end
                         end
                     else 
                         dotLabels = [];
@@ -761,6 +785,7 @@ classdef CyTracker < handle
                         cellData(iCell).NumSpots = numel(spotData);
                         cellData(iCell).NormSpotDist = [];
                         cellData(iCell).MeanSpotInt = zeros(1,numel(spotData));
+                        cellData(iCell).SpotCentroid = cat(1, spotData.Centroid);
                         
                         for iSpots = 1:numel(spotData)
                             
@@ -768,7 +793,7 @@ classdef CyTracker < handle
                             diffVec = spotData(iSpots).Centroid - cellData(iCell).Centroid;
                             
                             %Unit vector along cell axis
-                            unitVec = [cos((cellData(iCell).Orientation/180) * pi), sin((cellData(iCell).Orientation/180) * pi)];
+                            unitVec = [cosd((cellData(iCell).Orientation)), sind((cellData(iCell).Orientation))];
                             
                             %Calculate the projection of the spot along the
                             %cell axis
@@ -780,9 +805,6 @@ classdef CyTracker < handle
                         
                     end
                 end
-
-   
-
             end
             
             
@@ -795,7 +817,6 @@ classdef CyTracker < handle
                     cellLabelFinal(cellData(iData).PixelIdxList) = iData;                    
                 end
                 
-                
                 %Pad the array to ensure that the registered images
                 %will not wrap around
                 cellLabels_padded = padarray(cellLabelFinal, size(cellLabelFinal), 0, 'both');
@@ -805,27 +826,8 @@ classdef CyTracker < handle
                 regPxList = regionprops(cellLabels_padded, 'PixelIdxList', 'Area');
                 
                 for iData = 1:numel(cellData)
-                    
                     cellData(iData).RegisteredPxInd = regPxList(iData).PixelIdxList;
-                    %cellData(iData).RegCentroid = cellData(iData).Centroid - [pxShift(2) pxShift(1)];
                 end
-                
-%                 %DEBUG ONLY
-%                 imshow(cellLabels_padded, [])
-%                 keyboard
-                
-                %                     %To do this, we have to convert the PixelIdxList
-                %                     %values to subindex values - doens't work with negative
-                %                     %values
-                %                     for iData = 1:numel(cellData)
-                %
-                %                         [rowSub, colSub] = ind2sub([bfReader.height, bfReader.width], cellData(iData).PixelIdxList);
-                %
-                %                         rowSub = rowSub - pxShift(2);
-                %                         colSub = colSub - pxShift(1);
-                %
-                %                         cellData(iData).RegisteredPxInd = sub2ind([bfReader.height, bfReader.width], rowSub, colSub);
-                %                     end
                 
             end
             
@@ -963,29 +965,35 @@ classdef CyTracker < handle
                                         
                 case 'experimental'
                                        
-                    %Pre-process the brightfield image: median filter and
-                    %background subtraction
-                    bgImage = imopen(cellImage, strel('disk', 50));
+%                     %Pre-process the brightfield image: median filter and
+%                     %background subtraction
+                    cellImage = double(cellImage);
+
+                    bgImage = imopen(cellImage, strel('disk', 100));
                     cellImageTemp = cellImage - bgImage;
-                    cellImageTemp = imadjust(imgaussfilt(cellImageTemp,2), [0 0.9], []);
-                    cellImageTemp = imsharpen(cellImageTemp);
+                    cellImageTemp = imgaussfilt(cellImageTemp, 2);
+                    
+%                     cellImageTemp = imadjust(imgaussfilt(cellImageTemp,2), [0 0.9], []);
+%                     cellImageTemp = imsharpen(cellImageTemp);
+
+                    %cellImageTemp = double(cellImage);
                     
                     %Fit the background
                     [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
                     nCnts = smooth(nCnts, 3);
                     xBins = diff(xBins) + xBins(1:end-1);
                     
-                    %Find the peak background
-                    [bgPk, bgPkLoc] = max(nCnts);
+%                     %Find the peak background
+%                     [bgPk, bgPkLoc] = max(nCnts);
+%                     
+%                     %Find point where counts drop to fraction of peak
+%                     thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
+%                     thLoc = thLoc + bgPkLoc;
+%                     
+%                     thLvl = xBins(thLoc);
                     
-                    %Find point where counts drop to fraction of peak
-                    thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
-                    thLoc = thLoc + bgPkLoc;
-                    
-                    thLvl = xBins(thLoc);
-                    
-%                     gf = fit(xBins', nCnts', 'gauss1');
-%                     thLvl = gf.b1 + thFactor * gf.c1;
+                    gf = fit(xBins', nCnts, 'gauss1');
+                    thLvl = gf.b1 + thFactor * gf.c1;
                     
                     %Compute initial cell mask
                     mask = cellImageTemp > thLvl;
@@ -1007,7 +1015,6 @@ classdef CyTracker < handle
                     mask = imclearborder(mask);
                     mask = bwareaopen(mask, 100);
                     mask = bwmorph(mask,'thicken', 8);
-
                     
                     %Identify cells which are too large and try to split
                     %them
@@ -1049,8 +1056,6 @@ classdef CyTracker < handle
                         
                         newMask = bwareaopen(newMask, min(cellAreaLim));
                         newMask = bwmorph(newMask,'thicken', 8);
-                        %                         showoverlay(cellImage, newMask);
-                        %                         keyboard
                         
                         %Replace the old masks
                         mask(currMask) = 0;
@@ -1058,21 +1063,12 @@ classdef CyTracker < handle
                         
                     end
                     
-                    %                     %Looks for cells which are too small and join them
-                    %                     smallCells = find([rpCells.Area] < (medianArea + 4 * MAD));
-                    %                     for iCell = smallCells
-                    %
-                    %
-                    %
-                    %                     end
-                    
                     if ~exportRaw
                         %Redraw the masks using cylinders
                         rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
                         
                         %Remove cells which are too small or too large
                         rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
-                        
                         cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
                     else
                         cellLabels = mask;
@@ -1111,27 +1107,31 @@ classdef CyTracker < handle
                     mask(LL == 0) = 0;
                     %showoverlay(cellImage, bwperim(mask))
                     
-                    cellLabels = mask;
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+                    
+                    %Remove cells which are too small or too large
+                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                    
+                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
             end
-            
-            
+                        
             if ~any(cellLabels(:))
                 warning('No cells detected');              
             end
-            
         end
         
-        function spotMask = segmentSpots(imgIn, cellLabels, spotThreshold, bgSub, segMode, minSpotArea, expSpotDia, dogerodepx)
+        function spotMask = segmentSpots(imgIn, cellLabels, opts)
             %SEGMENTSPOTS  Finds spots
                     
             %Convert the carboxysome image to double
             imgInFilt = double(imgIn);
             
-            switch lower(segMode)
+            switch lower(opts.SpotSegMode)
                 
                 case 'localmax'
                     
-                    if bgSub
+                    if opts.SpotBgSubtract
                         %Perform a tophat subtraction
                         bgImg = imopen(imgInFilt, strel('disk', 7));
                         imgInFilt = imgInFilt - bgImg;
@@ -1158,34 +1158,23 @@ classdef CyTracker < handle
                         cellBgInt = mean(imgIn(currCellMask));
                         
                         currDotMask = dotMask & currCellMask;
-                        currDotMask(imgIn < spotThreshold * cellBgInt) = 0;
+                        currDotMask(imgIn < opts.SpotThreshold * cellBgInt) = 0;
                         
                         spotMask = spotMask | currDotMask;
                     end
-                    %
-                    %             %Refine the dots by global intensity
-                    %             meanDotInt = mean(imgIn(dotLabels));
-                    %             dotLabels(imgIn(dotLabels) < 1.5 * meanDotInt) = 0;
-                    
-                    
-                    %             keyboard
-                    %dotLabels = imdilate(dotLabels,[0 1 0; 1 1 1; 0 1 0]);
-                    
+     
                 case {'dog', 'diffgaussian'}
                     %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
                     
-                    
-                    if dogerodepx > 0
-                        
+                    if opts.SpotErodePx > 0
                         %Hack to remove spots at corner of image
                         cellMask = cellLabels > 0;
                         cellMask = imdilate(cellMask, strel('disk', 1));
                         cellMask = imfill(cellMask, 'holes');
-                        cellLabels = imerode(cellMask, strel('disk',dogerodepx));
-                        
+                        cellLabels = imerode(cellMask, strel('disk',opts.SpotErodePx));
                     end
                     
-                    sigma1 = (1 / (1 + sqrt(2))) * expSpotDia;
+                    sigma1 = (1 / (1 + sqrt(2))) * opts.DoGSpotDiameter;
                     sigma2 = sqrt(2) * sigma1;                    
                     
                     g1 = imgaussfilt(imgInFilt, sigma1);
@@ -1200,13 +1189,13 @@ classdef CyTracker < handle
                     
                     gf = fit(xBins', nCnts', 'gauss1');
                     
-                    spotBg = gf.b1 + spotThreshold .* gf.c1;
+                    spotBg = gf.b1 + opts.SpotThreshold .* gf.c1;
                     
                     %Segment the spots
                     spotMask = dogImg > spotBg;
                     spotMask(~cellLabels) = false;
            
-                    spotMask = bwareaopen(spotMask, minSpotArea);
+                    spotMask = bwareaopen(spotMask, opts.MinSpotArea);
 
                     dd = -bwdist(~spotMask);
                     
@@ -1214,22 +1203,130 @@ classdef CyTracker < handle
                     
                     spotMask(LL == 0) = false;
 
-%                     %Refine by CNR
-%                     spotCC = bwconncomp(spotMask);
-%                     for spotIdx = 1:spotCC.NumObjects
-%                         
-%                         currMask = false(size(spotMask));
-%                         currMask(spotCC.PixelIdxList{spotIdx}) = true;
-%                         
-%                         currMask2 = bwmorph(currMask,'grow', 4);
-%                         currMask2(currMask) = false;
-%                         
-%                         CNR = mean(
-%                         
-%                         
-%                     end
+                case 'dogcell'
+                    %https://imagej.net/TrackMate_Algorithms#Spot_features_generated_by_the_spot_detectors
+                    
+                    
+                    if opts.SpotErodePx > 0
+                        
+                        %Hack to remove spots at corner of image
+                        cellMask = cellLabels > 0;
+                        cellMask = imdilate(cellMask, strel('disk', 1));
+                        cellMask = imfill(cellMask, 'holes');
+                        cellLabels = imerode(cellMask, strel('disk',opts.SpotErodePx));
+                        
+                    end
+                    
+                    sigma1 = (1 / (1 + sqrt(2))) * opts.DoGSpotDiameter;
+                    sigma2 = sqrt(2) * sigma1;                    
+                    
+                    g1 = imgaussfilt(imgInFilt, sigma1);
+                    g2 = imgaussfilt(imgInFilt, sigma2);
+                    
+                    dogImg = imcomplement(g2 - g1);
+                    
+                    %bgVal = mean(dogImg(:));
+                    
+                    [nCnts, xBins] = histcounts(dogImg(:));
+                    xBins = diff(xBins) + xBins(1:end-1);
+                    
+                    gf = fit(xBins', nCnts', 'gauss1');
+                    
+                    spotBg = gf.b1 + opts.SpotThreshold .* gf.c1;
+                    
+                    %Segment the spots
+                    spotMask = dogImg > spotBg;
+                    spotMask(~cellLabels) = false;
+           
+                    spotMask = bwareaopen(spotMask, opts.MinSpotArea);
 
+                    dd = -bwdist(~spotMask);
+                    
+                    LL = watershed(dd);
+                    
+                    spotMask(LL == 0) = false;
+                    
+                    for iCell = 1:double(max(cellLabels(:)))
+                        
+                        spotsInCell = spotMask;
+                        spotsInCell(cellLabels ~= iCell) = 0;
+                        
+                        cc = bwconncomp(spotsInCell);
+                        
+                        %Compute cell statistics
+                        meanIntCell = mean(imgInFilt(cellLabels == iCell & ~spotsInCell));
+                        stdIntCell = std(imgInFilt(cellLabels == iCell & ~spotsInCell));
+                        
+                        for iSpot = 1:cc.NumObjects
+                            
+                            currSpotMask = false(size(spotMask));
+                            currSpotMask(cc.PixelIdxList{iSpot}) = true;
+                            
+                            %maxSpotInt = max(max(imgInFilt(currSpotMask)));
+                            maxSpotInt = mean(imgInFilt(currSpotMask));
+                        
+                            spotCNR = (maxSpotInt - meanIntCell) ./ stdIntCell;
+                            
+                            if spotCNR < opts.SpotCNR
+                                spotMask(currSpotMask) = false;
+                            end
+                            
+                        end
+                        
+                        
+                    end
+                    spotMask = bwareaopen(spotMask, opts.MinSpotArea);
+
+                case 'dog2'
+                    
+                    %Background subtract the spot image
+                    spotImgBG = imopen(imgInFilt, strel('disk', 8));
+                    %spotImgBG = medfilt2(spotImg, [10 10]);
+                    
+                    spotImgBgSub = imgInFilt - spotImgBG;
+                    spotImgBgSub = medfilt2(spotImgBgSub, [3 3]);
+                    
+                    sigma1 = (1 / (1 + sqrt(2))) * spotDiameter;
+                    sigma2 = sqrt(2) * sigma1;
+                    
+                    g1 = imgaussfilt(spotImgBgSub, sigma1);
+                    g2 = imgaussfilt(spotImgBgSub, sigma2);
+                    dogImg = g2 - g1;
+
+                    dogImg = medfilt2(dogImg, [3 3]);
+                    
+                    [nCnts, xBins] = histcounts(dogImg(:));
+                    xBins = diff(xBins) - xBins(1:end - 1);
+                    [~, maxCnts] = max(nCnts);
+                    
+                    dogThLvl = xBins(maxCnts) - 9 .* std(dogImg(:));
+                    dogMask = dogImg < dogThLvl;
+                    
+                    %     cellCC = bwconncomp(dogMask);
+                    %
+                    %     for iCell = 1:cellCC.NumObjects
+                    %
+                    %         currRingMask = false(size(dogMask));
+                    %         currRingMask(cellCC.PixelIdxList{iCell}) = true;
+                    %         currRingMask = imdilate(currRingMask, strel('disk', 3));
+                    %         currRingMask(cellCC.PixelIdxList{iCell}) = false;
+                    %
+                    %         meanInt = mean(spotImgBgSub(cellCC.PixelIdxList{iCell}));
+                    %
+                    %         meanRing = mean(spotImgBgSub(currRingMask));
+                    %
+                    %         CNR = meanInt / meanRing;
+                    %
+                    %         if CNR < 1.2
+                    %             dogMask(cellCC.PixelIdxList{iCell}) = false;
+                    %         end
+                    %
+                    %     end
+                    
+                    dogMask(cellLabels == 0) = 0;
+                    spotMask = bwareaopen(dogMask, 4);
             end
+            
         end
         
         function varargout = showoverlay(img, mask, varargin)
