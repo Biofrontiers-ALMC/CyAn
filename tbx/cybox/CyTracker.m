@@ -965,18 +965,13 @@ classdef CyTracker < handle
                                         
                 case 'experimental'
                                        
-%                     %Pre-process the brightfield image: median filter and
-%                     %background subtraction
-                    cellImage = double(cellImage);
-
-                    bgImage = imopen(cellImage, strel('disk', 100));
+                    %Pre-process the brightfield image: median filter and
+                    %background subtraction
+                    cellImage = double(cellImage);                    
+                   
+                    bgImage = imopen(cellImage, strel('disk', 30));
                     cellImageTemp = cellImage - bgImage;
                     cellImageTemp = imgaussfilt(cellImageTemp, 2);
-                    
-%                     cellImageTemp = imadjust(imgaussfilt(cellImageTemp,2), [0 0.9], []);
-%                     cellImageTemp = imsharpen(cellImageTemp);
-
-                    %cellImageTemp = double(cellImage);
                     
                     %Fit the background
                     [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
@@ -984,20 +979,16 @@ classdef CyTracker < handle
                     xBins = diff(xBins) + xBins(1:end-1);
                     
 %                     %Find the peak background
-%                     [bgPk, bgPkLoc] = max(nCnts);
-%                     
-%                     %Find point where counts drop to fraction of peak
-%                     thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
-%                     thLoc = thLoc + bgPkLoc;
-%                     
-%                     thLvl = xBins(thLoc);
+                    [bgPk, bgPkLoc] = max(nCnts);
                     
-                    gf = fit(xBins', nCnts, 'gauss1');
-                    thLvl = gf.b1 + thFactor * gf.c1;
+                    %Find point where counts drop to fraction of peak
+                    thLoc = find(nCnts(bgPkLoc:end) <= bgPk * thFactor, 1, 'first');
+                    thLoc = thLoc + bgPkLoc;
+                    
+                    thLvl = xBins(thLoc);
                     
                     %Compute initial cell mask
                     mask = cellImageTemp > thLvl;
-
                     mask = imopen(mask, strel('disk', 3));
                     mask = imclose(mask, strel('disk', 3));
                     
@@ -1011,10 +1002,65 @@ classdef CyTracker < handle
                     LL = watershed(dd);
                     mask(LL == 0) = 0;
                     
+                    stdBG = std(cellImageTemp(mask == 0));
+                    
                     %Tidy up
                     mask = imclearborder(mask);
                     mask = bwareaopen(mask, 100);
                     mask = bwmorph(mask,'thicken', 8);
+                    
+                    maskCC = bwconncomp(mask);
+                    
+                    store = zeros(maskCC.NumObjects, 2);
+
+                    for iObj = 1:maskCC.NumObjects
+                        
+                        meanObj = mean(cellImage(maskCC.PixelIdxList{iObj}));
+                        stdObj = std(cellImageTemp(maskCC.PixelIdxList{iObj}));
+                        
+                        if stdObj < 3 * stdBG
+                            mask(maskCC.PixelIdxList{iObj}) = 0;
+                        end
+                        
+                        store(iObj, 1) = meanObj;
+                        store(iObj, 2) = stdObj;
+                    end
+                    %keyboard
+%                     
+%                     if maskCC.NumObjects <= 15
+%                         
+%                         %Refine the masks
+%                         labels = bwlabel(mask);
+%                         labelsRing = imdilate(labels, strel('disk', 2));
+%                         labelsRing(mask) = 0;
+%                         
+%                         cellData = regionprops(labels, cellImageTemp, 'MeanIntensity');
+%                         
+%                         %For few cells, measure by CNR
+%                         noiseData = regionprops(labelsRing, cellImageTemp, 'MeanIntensity');
+%                         CNR = [cellData.MeanIntensity] ./ [noiseData.MeanIntensity];
+%                         
+%                         for iC = 1:numel(cellData)
+%                             if CNR(iC) < 1.1
+%                                 mask(labels == iC) = 0;
+%                             end
+%                         end
+%                     else
+%                         
+%                         storeSTD = zeros(1, maskCC.NumObjects);
+%                         for iObj = 1:maskCC.NumObjects
+%                             storeSTD(iObj) = std(cellImageTemp(maskCC.PixelIdxList{iObj}));
+%                         end
+%                         
+%                         stdThresh = mean(storeSTD) - 1.5 * std(storeSTD);
+%                         
+%                         for iObj = 1:maskCC.NumObjects
+%                             if storeSTD(iObj) < stdThresh
+%                                 mask(maskCC.PixelIdxList{iObj}) = 0;
+%                             end
+%                         end
+%                         
+%                     end
                     
                     %Identify cells which are too large and try to split
                     %them
@@ -1030,17 +1076,10 @@ classdef CyTracker < handle
                         
                         currMask = false(size(mask));
                         currMask(rpCells(iCell).PixelIdxList) = true;
-                        
-                        %                         showoverlay(cellImage, currMask)
-                        %                         keyboard
-                        
                         thLvl = prctile(cellImage(currMask), 40);
                         
                         newMask = cellImage > thLvl;
                         newMask(~currMask) = 0;
-                        
-                        %                         showoverlay(cellImage, newMask)
-                        %                         keyboard
                         
                         newMask = imopen(newMask, strel('disk', 3));
                         newMask = imclose(newMask, strel('disk', 3));
@@ -1070,6 +1109,11 @@ classdef CyTracker < handle
                         %Remove cells which are too small or too large
                         rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
                         cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+%                         
+%                         showoverlay(cellLabels, bwperim(mask));
+%                         keyboard
+%                         
+                        
                     else
                         cellLabels = mask;
                     end
