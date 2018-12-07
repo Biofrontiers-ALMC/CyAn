@@ -801,6 +801,7 @@ classdef CyTracker < handle
                                  
                             cellData(iCell).NormSpotDist(iSpots) = projLen;
                             cellData(iCell).MeanSpotInt(iSpots) = mean(currImage(spotData(iSpots).PixelIdxList));
+  
                         end
                         
                     end
@@ -848,8 +849,7 @@ classdef CyTracker < handle
             if ~isempty(varargin)
                 exportRaw = varargin{1};                
             end
-            
-            
+                        
             switch lower(segMode)
                 
                 case 'brightfield'
@@ -1705,7 +1705,6 @@ classdef CyTracker < handle
 %             end
             
         end
-        
         
     end
     

@@ -37,6 +37,7 @@ classdef MaskEditor < handle
             %--- Menu items ---%
             set(obj.handles_.mnuLoadImage, 'callback', @(src, event) loadImage(obj, src, event));
             
+            set(obj.handles_.mnuNewMask, 'callback', @(src, event) createNewMask(obj, src, event));
             set(obj.handles_.mnuLoadMask, 'callback', @(src, event) loadMask(obj, src, event));
             set(obj.handles_.mnuSaveAsMask, 'callback', @(src, event) saveMask(obj, src, event));
             set(obj.handles_.mnuOverwriteMask, 'callback', @(src, event) saveMask(obj, src, event));
@@ -130,6 +131,22 @@ classdef MaskEditor < handle
             obj.handles_.mnuMask.Enable = 'on';
             
             updateImage(obj, src, events);
+            
+        end
+        
+        function createNewMask(obj, src, events)
+            %Create empty mask data
+            
+            obj.maskData = false(obj.baseImgReader.height, ...
+                obj.baseImgReader.width, ...
+                obj.baseImgReader.sizeT);
+            
+            updateImage(obj, src, events);
+            
+            obj.handles_.mnuSaveAsMask.Enable = 'on';
+            
+            obj.handles_.mnuFunctions.Enable = 'on';
+            obj.handles_.pbToggleMask.Enable = 'on';
             
         end
         
