@@ -29,7 +29,7 @@ classdef CyTracker < handle
         SaveMasks = false;
         
         %Segmentation options
-        ChannelToSegment char = '';
+        ChannelToSegment = '';
         SegMode char = '';
         ThresholdLevel double = 1.4;
         
@@ -578,13 +578,25 @@ classdef CyTracker < handle
                     
                     %-- v2.0 TODO: Move these functions out --%
                     %Segment the cells
-                    imgToSegment = bfReader.getPlane(1, opts.ChannelToSegment, iT);
+                    if ~iscell(opts.ChannelToSegment)
+                       opts.ChannelToSegment = {opts.ChannelToSegment}; 
+                    end
                     
+                    imgToSegment = zeros(bfReader.height, bfReader.width, 'uint16');
+                    for iC = 1:numel(opts.ChannelToSegment)
+                        imgToSegment = (bfReader.getPlane(1, opts.ChannelToSegment{iC}, iT)) + imgToSegment;
+                    end
+                          
                     if ~opts.UseMasks
                         %Segment the cells
                         cellLabels = CyTracker.getCellLabels(imgToSegment, ...
                             opts.ThresholdLevel, opts.SegMode,...
                             opts.MaxCellMinDepth, opts.CellAreaLim);
+                        
+%                         cellLabels = CyTracker.getCellLabels(imcomplement(imgToSegment), ...
+%                             opts.ThresholdLevel, opts.SegMode,...
+%                             opts.MaxCellMinDepth, opts.CellAreaLim);
+                        
                         
                         if opts.SaveMasks
                             if iT == frameRange(1)
@@ -595,10 +607,12 @@ classdef CyTracker < handle
                             end
                         end
                         
-                        
                     else
                         %Load the masks
-                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',fname, iSeries)),'Index', iT);
+                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%dcellMask.tif',fname, iSeries)),'Index', iT);
+                        
+                        mask = mask > 0;
+                        %mask = ~mask;
                         
                         cellLabels = labelmatrix(bwconncomp(mask(:,:,1)));
                     end
@@ -846,7 +860,7 @@ classdef CyTracker < handle
             
         end
         
-        function cellLabels = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, cellAreaLim, varargin)
+        function LL = getCellLabels(cellImage, thFactor, segMode, maxCellminDepth, cellAreaLim, varargin)
             %GETCELLLABELS  Segment and label individual cells
             %
             %  L = CyTracker.GETCELLLABELS(I) will segment the cells in image
@@ -868,14 +882,14 @@ classdef CyTracker < handle
                     
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
-                    cellImageTemp = medfilt2(cellImage,[3 3]);
+                    cellImageTemp = double(medfilt2(cellImage,[3 3]));
                     
-                    bgImage = imopen(cellImageTemp, strel('disk', 20));
+                    bgImage = imopen(cellImageTemp, strel('disk', 40));
                     cellImageTemp = cellImageTemp - bgImage;
                     
                     %Fit the background
-                    [nCnts, xBins] = histcounts(cellImageTemp(:));
-                    xBins = diff(xBins) + xBins(1:end-1);
+                    [nCnts, xBins] = histcounts(cellImageTemp(:), 150);
+                    xBins = diff(xBins) + 0.5 * xBins(1:end-1);
                     
                     gf = fit(xBins', nCnts', 'gauss1');
                                         
@@ -909,7 +923,7 @@ classdef CyTracker < handle
                     %Remove cells which are too small or too large
                     rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
                     
-                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                    LL = CyTracker.drawCapsule(size(mask), rpCells);
                     
                 case 'fluorescence'
             
@@ -922,58 +936,74 @@ classdef CyTracker < handle
                     binCenters = diff(binEdges) + binEdges(1:end-1);
                     
                     %Determine the background intensity level
-                    [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
+%                     [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
                     
-                    gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
+%                     gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
+%                     
+%                     thLvl = gf.b1 + thFactor * gf.c1;
+%                     
+                    [maxVal, maxInd] = max(nCnts);
+                    thInd = find(nCnts((maxInd + 1): end) < maxVal * thFactor, 1, 'first');
+                    thLvl = binCenters(maxInd + thInd);
                     
-                    thLvl = gf.b1 + thFactor * gf.c1;
                     mask = cellImage > thLvl;
                     
-                    mask = imopen(mask,strel('disk',2));
+                    mask = imopen(mask,strel('disk',3));
                     mask = imclearborder(mask);
                     
-                    mask = activecontour(cellImage,mask);
+                    %mask = activecontour(cellImage,mask);
                     
                     mask = bwareaopen(mask,100);
                     mask = imopen(mask,strel('disk',2));
+                    mask = ~bwmorph(~mask, 'clean');
+%                     mask = imfill(mask,'holes');
                     
-                    mask = imfill(mask,'holes');
+                    dd = -bwdist(~mask);
+                    dd(~mask) = -Inf;
                     
-                    %Try to mark the image
-                    markerImg = medfilt2(cellImage,[10 10]);
-                    markerImg = imregionalmax(markerImg,8);
-                    markerImg(~mask) = 0;
-                    markerImg = imdilate(markerImg,strel('disk', 6));
-                    markerImg = imerode(markerImg,strel('disk', 3));
+                    dd = imhmin(dd, maxCellminDepth);
                     
-                    %Remove regions which are too dark
-                    rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
-                    markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
+                    tmpLabels = watershed(dd);
                     
-                    idxToDelete = 1:numel(rptemp);
-                    idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
+                    mask(tmpLabels == 0) = 0;                    
                     
-                    for ii = idxToDelete
-                        markerImg(rptemp(ii).PixelIdxList) = 0;
-                    end
+                    LL = bwareaopen(mask, 100);
                     
-                    dd = imcomplement(medfilt2(cellImage,[4 4]));
-                    dd = imimposemin(dd, ~mask | markerImg);
-                    
-                    cellLabels = watershed(dd);
-                    cellLabels = imclearborder(cellLabels);
-                    cellLabels = imopen(cellLabels, strel('disk',6));
-                    
-                    %Redraw the masks using cylinders
-                    rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
-                    
-                    %Remove cells which are too small or too large
-                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
-                    
-                    cellLabels = zeros(size(cellLabels));
-                    for ii = 1:numel(rpCells)
-                        cellLabels(rpCells(ii).PixelIdxList) = ii;
-                    end
+%                     %Try to mark the image
+%                     markerImg = medfilt2(cellImage,[10 10]);
+%                     markerImg = imregionalmax(markerImg,8);
+%                     markerImg(~mask) = 0;
+%                     markerImg = imdilate(markerImg,strel('disk', 6));
+%                     markerImg = imerode(markerImg,strel('disk', 3));
+%                     
+%                     %Remove regions which are too dark
+%                     rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
+%                     markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
+%                     
+%                     idxToDelete = 1:numel(rptemp);
+%                     idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
+%                     
+%                     for ii = idxToDelete
+%                         markerImg(rptemp(ii).PixelIdxList) = 0;
+%                     end
+%                     
+%                     dd = imcomplement(medfilt2(cellImage,[4 4]));
+%                     dd = imimposemin(dd, ~mask | markerImg);
+%                     
+%                     cellLabels = watershed(dd);
+%                     cellLabels = imclearborder(cellLabels);
+%                     cellLabels = imopen(cellLabels, strel('disk',6));
+%                     
+%                     %Redraw the masks using cylinders
+%                     rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
+%                     
+%                     %Remove cells which are too small or too large
+%                     rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+%                     
+%                     cellLabels = zeros(size(cellLabels));
+%                     for ii = 1:numel(rpCells)
+%                         cellLabels(rpCells(ii).PixelIdxList) = ii;
+%                     end
                                         
                 case 'experimental'
                                        
@@ -981,14 +1011,14 @@ classdef CyTracker < handle
                     %background subtraction
                     cellImage = double(cellImage);                    
                    
-                    bgImage = imopen(cellImage, strel('disk', 30));
+                    bgImage = imopen(cellImage, strel('disk', 50));
                     cellImageTemp = cellImage - bgImage;
                     cellImageTemp = imgaussfilt(cellImageTemp, 2);
                     
                     %Fit the background
-                    [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
+                    [nCnts, xBins] = histcounts(cellImageTemp(:), 150);
                     nCnts = smooth(nCnts, 3);
-                    xBins = diff(xBins) + xBins(1:end-1);
+                    xBins = diff(xBins) + 0.5 * xBins(1:end-1);
                     
                     %Find the peak background
                     [bgPk, bgPkLoc] = max(nCnts);
@@ -1120,14 +1150,14 @@ classdef CyTracker < handle
                         
                         %Remove cells which are too small or too large
                         rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
-                        cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                        LL = CyTracker.drawCapsule(size(mask), rpCells);
 %                         
 %                         showoverlay(cellLabels, bwperim(mask));
 %                         keyboard
 %                         
                         
                     else
-                        cellLabels = mask;
+                        LL = mask;
                     end
                     
                 case 'cy5'
@@ -1169,7 +1199,7 @@ classdef CyTracker < handle
                     %Remove cells which are too small or too large
                     rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
                     
-                    cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                    LL = CyTracker.drawCapsule(size(mask), rpCells);
                     
                 case 'offset'
                                         
@@ -1229,36 +1259,25 @@ classdef CyTracker < handle
                     mask = bwmorph(mask,'thicken', 8);
 %                     showoverlay(cellImageTemp, bwperim(mask))
                     
-                    cellLabels = mask;
+                    LL = mask;
 %                     keyboard
+
+                otherwise
                     
-                case 'brightfield2'
+                    %Call a script. The script must have the following
+                    %format:
+                    %LABELS = FUNC(cellImage, opts)
+                    %Where opts will be a strucvt containing:
+                    %thFactor, segMode, maxCellminDepth, cellAreaLim
+                    opts.thFactor = thFactor;
+                    opts.segMode = segMode;
+                    opts.maxCellminDepth = maxCellminDepth;
+                    opts.cellAreaLim = cellAreaLim;
                     
-                    cellImage = double(cellImage);
-                    
-                    bg = imgaussfilt(cellImage, 200);
-                    IbgSub = cellImage - bg;
-                    
-                    mask = IbgSub < thFactor;
-                    
-                    mask = bwareaopen(mask, 300);
-                    mask = imopen(mask, strel('disk', 3));
-                    mask = imfill(mask, 'holes');
-                    mask = imclose(mask, strel('disk', 2));
-                    
-                    dd = -bwdist(~mask);
-                    dd(~mask) = -Inf;
-                    dd = imhmin(dd, 1.5);
-                    
-                    cellLabels = watershed(dd);
-                    mask(cellLabels == 0) = false;
-                    mask = bwareaopen(mask, 300);
-                    
-                    cellLabels = mask;          
-            
+                    LL = eval([segMode, '(cellImage, opts)']);
             end
                         
-            if ~any(cellLabels(:))
+            if ~any(LL(:))
                 warning('No cells detected');              
             end
         end
