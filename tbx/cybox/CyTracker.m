@@ -317,6 +317,9 @@ classdef CyTracker < handle
                     'Could not open file to write')
             end
             
+            %First, write the date
+            fprintf(fid,'%s %s \r\n','%Processed on', date);
+            
             propertyList = properties(obj);
             
             %Write output data depending on the datatype of the value
