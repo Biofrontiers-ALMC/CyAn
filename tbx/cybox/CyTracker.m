@@ -1417,13 +1417,13 @@ classdef CyTracker < handle
                         %Redraw the masks using cylinders
                         rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
 
-                        cellLabels = CyTracker.drawCapsule(size(mask), rpCells);
+                        LL = CyTracker.drawCapsule(size(mask), rpCells);
                         
 %                         showoverlay(cellLabels, bwperim(mask));
 %                         keyboard
                         
                     else
-                        cellLabels = mask;
+                        LL = mask;
                     end
                     
                 case 'cy5'
