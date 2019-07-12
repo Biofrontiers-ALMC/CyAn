@@ -1312,7 +1312,7 @@ classdef CyTracker < handle
                         %Repeat the watershedding
                         dd = -bwdist(~newMask);
                         dd(~newMask) = -Inf;
-                        dd = imhmin(dd, 8);
+                        dd = imhmin(dd, maxCellminDepth + 3);
                         LL = watershed(dd);
                         newMask(LL == 0) = 0;
                         
@@ -1335,7 +1335,6 @@ classdef CyTracker < handle
                     %Average area
                     medianArea = median([rpCells.Area]);                                        
                     MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-
                     outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
                     outlierCells = [outlierCells, find([rpCells.Area] > max(cellAreaLim))];
                     outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
@@ -1343,36 +1342,60 @@ classdef CyTracker < handle
                     outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
                     outlierCells = unique(outlierCells);
                     
-                    for iCell = outlierCells
+%                     currPrcTile = 30;
+%                     while ~isempty(outlierCells)
+%                         
+%                         currPrcTile = currPrcTile + 5;
+                        for iCell = outlierCells
+                            
+                            currMask = false(size(mask));
+                            currMask(rpCells(iCell).PixelIdxList) = true;
+                            thLvl = prctile(cellImage(currMask), 40);
+                            
+                            newMask = cellImage > thLvl;
+                            newMask(~currMask) = 0;
+                            
+                            newMask = imopen(newMask, strel('disk', 3));
+                            newMask = imclose(newMask, strel('disk', 3));
+                            newMask = imerode(newMask, ones(1));
+                            
+                            dd = -bwdist(~newMask);
+                            dd(~newMask) = -Inf;
+                            dd = imhmin(dd, maxCellminDepth);
+                            LL = watershed(dd);
+                            newMask(LL == 0) = 0;
+                            
+                            newMask = bwareaopen(newMask, 100);
+                            newMask = bwmorph(newMask,'thicken', 8);
+                            
+                            %For all new cell objects, check stDev
+                            newMask = CyTracker.bgStDevFilter(cellImageTemp, newMask, thFactor);
+                            
+                            %Replace the old masks
+                            mask(currMask) = 0;
+                            mask(currMask) = newMask(currMask);
+                            
+                        end
                         
-                        currMask = false(size(mask));
-                        currMask(rpCells(iCell).PixelIdxList) = true;
-                        thLvl = prctile(cellImage(currMask), 40);
-                        
-                        newMask = cellImage > thLvl;
-                        newMask(~currMask) = 0;
-                        
-                        newMask = imopen(newMask, strel('disk', 3));
-                        newMask = imclose(newMask, strel('disk', 3));
-                        newMask = imerode(newMask, ones(1));
-                        
-                        dd = -bwdist(~newMask);
-                        dd(~newMask) = -Inf;
-                        dd = imhmin(dd, maxCellminDepth);
-                        LL = watershed(dd);
-                        newMask(LL == 0) = 0;
-                        
-                        newMask = bwareaopen(newMask, 100);
-                        newMask = bwmorph(newMask,'thicken', 8);
-                        
-                        %For all new cell objects, check stDev
-                        newMask = CyTracker.bgStDevFilter(cellImageTemp, newMask, thFactor);
-                        
-                        %Replace the old masks
-                        mask(currMask) = 0;
-                        mask(currMask) = newMask(currMask);
-                        
-                    end
+%                         %Then, re-calculate outlier cells. If any exist,
+%                         %repeat local thresholding, but slightly more
+%                         %stringent each time
+%                         outlierCells = [];
+%                         
+%                         %Identify outlier cells and try to split them
+%                         rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
+%                         
+%                         %Average area
+%                         medianArea = median([rpCells.Area]);
+%                         MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
+%                         outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
+%                         outlierCells = [outlierCells, find([rpCells.Area] > max(cellAreaLim))];
+%                         outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
+%                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+%                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
+%                         outlierCells = unique(outlierCells);
+%                         
+%                     end
                     
                     %Do final check for escapee outliers
                     rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
@@ -1400,7 +1423,7 @@ classdef CyTracker < handle
                         
                         dd = -bwdist(~newMask);
                         dd(~newMask) = -Inf;
-                        dd = imhmin(dd, 2);
+                        dd = imhmin(dd, maxCellminDepth-3);
                         LL = watershed(dd);
                         newMask(LL == 0) = 0;
                         
