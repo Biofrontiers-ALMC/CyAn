@@ -666,6 +666,17 @@ classdef CyTracker < handle
                             
                             %Initialize a new object for tracking
                             Linker = LAPLinker;
+                            Linker.LinkedBy = opts.LinkedBy;
+                            Linker.LinkCostMetric = opts.LinkCalculation;
+                            Linker.LinkScoreRange = opts.LinkingScoreRange;
+                            Linker.MaxTrackAge = opts.MaxTrackAge;
+                            Linker.TrackDivision = opts.TrackMitosis;
+                            Linker.DivisionParameter = opts.MitosisParameter;
+                            Linker.DivisionScoreMetric = opts.MitosisCalculation;
+                            Linker.DivisionScoreRange = opts.MitosisScoreRange;
+                            Linker.MinFramesBetweenDiv = opts.MinAgeSinceMitosis;
+                            
+                            %Add the first dataset
                             Linker = assignToTrack(Linker, iT, cellData);
                             
                             %Write file metadata
@@ -686,6 +697,8 @@ classdef CyTracker < handle
                                 %Link data to existing tracks
                                 Linker = Linker.assignToTrack(iT, cellData);
                             catch ME
+                                
+                                keyboard
                                 %Handle errors
                                 fprintf('Error linking at frame %d\n', iT);
                                 
