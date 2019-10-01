@@ -669,9 +669,9 @@ classdef CyTracker < handle
                        opts.ChannelToSegment = {opts.ChannelToSegment}; 
                     end
                     
-                    imgToSegment = zeros(bfReader.height, bfReader.width, 'uint16');
+                    imgToSegment = zeros(bfReader.height, bfReader.width, numel(opts.ChannelToSegment), 'uint16');
                     for iC = 1:numel(opts.ChannelToSegment)
-                        imgToSegment = (bfReader.getPlane(1, opts.ChannelToSegment{iC}, iT)) + imgToSegment;
+                        imgToSegment(:, :, iC) = (bfReader.getPlane(1, opts.ChannelToSegment{iC}, iT));
                     end
                           
                     if ~opts.UseMasks
@@ -815,7 +815,8 @@ classdef CyTracker < handle
                                 end
                             end
                             
-                            cellImgOut = CyTracker.makeAnnotatedImage(iT, imgToSegment, cellLabels, trackLinker);
+                            cellImgOut = CyTracker.makeAnnotatedImage(iT, imgToSegment(:, :, 1), cellLabels, trackLinker);
+                            
                             if numel(frameRange) > 1
                                 vidObj.writeVideo(cellImgOut);
                             else
@@ -920,8 +921,7 @@ classdef CyTracker < handle
                     end
                 end
             end
-            
-            
+                        
             %If the image was registered, apply a correction to the
             %PixelIdxList values for tracking code to work correctly
             if ~isempty(pxShift)
