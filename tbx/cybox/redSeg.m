@@ -1,6 +1,9 @@
 function LL = redSeg(cellImage, opts)
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%REDSEG Use for segmenting cells in the brightfield (red) channel.
+%   REDSEG(cellImage, opts) segments cells in cellImage with the options in
+%   opts, carried over from the CyTracker function. Recommended
+%   MaxCellMinDepth is 5. ThresholdLevel is currently not used in this
+%   function.
 
 %Get a threshold
 [nCnts, binEdges] = histcounts(cellImage(:),linspace(0, double(max(cellImage(:))), 150));
