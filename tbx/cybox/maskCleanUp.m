@@ -7,7 +7,6 @@ fileInfo = imfinfo(fullfile('/Users/nicholashill/Desktop/Matlab/Single Cell Anal
 %Then, load each page
 for iFrame = 1:numel(fileInfo)
     currImg = imread(fileInfo(iFrame).Filename, iFrame);
-    currImg = double(currImg);
     inputMask = currImg > 0;
     
     %Then, for each object, make it into a cylinder.

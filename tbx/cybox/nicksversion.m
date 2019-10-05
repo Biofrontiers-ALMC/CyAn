@@ -181,11 +181,11 @@ for iCell = escapees
 end
 
 
-
-%Redraw the masks using cylinders
-rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
-
-LL = CyTracker.drawCapsule(size(mask), rpCells);
+LL = mask;
+% %Redraw the masks using cylinders
+% rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+% 
+% LL = CyTracker.drawCapsule(size(mask), rpCells);
     
 end
 

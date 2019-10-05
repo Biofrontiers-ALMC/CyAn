@@ -1269,6 +1269,7 @@ classdef CyTracker < handle
                     
                     mask = activecontour(cellImage, mask);
                     
+                    
                     dd = -bwdist(~mask);
                     dd(~mask) = -Inf;
                     
