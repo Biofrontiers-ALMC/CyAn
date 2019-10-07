@@ -13,7 +13,7 @@ binCenters = diff(binEdges) + binEdges(1:end-1);
 [bgPk, bgPkLoc] = max(nCnts);
 %Find point where counts drop to fraction of peak
 thLoc = find(nCnts(bgPkLoc:end) <= bgPk * 1000, 1, 'first'); %Set thFactor
-thLoc = thLoc + bgPkLoc-10; %Change this value to alter threshold
+thLoc = thLoc + bgPkLoc-opts.thFactor; %Change this value to alter threshold
 thLvl = binCenters(thLoc);
 
 %compute mask, take inverse, and fill holes
