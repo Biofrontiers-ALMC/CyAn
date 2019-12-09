@@ -35,18 +35,25 @@ rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisL
 %Average area
 medianArea = median([rpCells.Area]);
 MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
-outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-outlierCells = unique(outlierCells);
+outlierCellsLarge = find([rpCells.Area] > (medianArea + 3.0 * MAD));
+outlierCellsLarge = [outlierCellsLarge, find([rpCells.Area] > max(opts.cellAreaLim))];
+outlierCellsLarge = [outlierCellsLarge, find([rpCells.MinorAxisLength] > 46)];
+outlierCellsLarge = [outlierCellsLarge, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+outlierCellsLarge = [outlierCellsLarge, find([rpCells.MajorAxisLength] > 115)];
+outlierCellsLarge = unique(outlierCellsLarge);
 
 prcTile = 50;
+counter = 0;
+while ~isempty(outlierCellsLarge)
+        
+    %If outliers persist for too long, simply break out of this loop and
+    %deal with them.
+    counter = counter + 1;
+    if counter > 20
+        break
+    end
 
-while ~isempty(outlierCells)
-
-    for iCell = outlierCells
+    for iCell = outlierCellsLarge
         
         currMask = false(size(mask));
         currMask(rpCells(iCell).PixelIdxList) = true;
@@ -65,23 +72,28 @@ while ~isempty(outlierCells)
         
         newMask = bwareaopen(newMask, 100);
         newMask = bwmorph(newMask,'thicken', 8);
+
+        %Eliminate cracks in cells
+        newMask = imcomplement(newMask);
+        newMask = bwmorph(newMask, 'spur', inf);
+        newMask = imcomplement(newMask);
         
         %Replace the old masks
         mask(currMask) = 0;
         mask(currMask) = newMask(currMask);
     end
     
-    %Identify outlier cells and try to split them
+    %Identify outlier cells again
     rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
     %Average area
     medianArea = median([rpCells.Area]);
     MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-    outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-    outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
-    outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-    outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-    outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-    outlierCells = unique(outlierCells);
+    outlierCellsLarge = find([rpCells.Area] > (medianArea + 3.0 * MAD));
+    outlierCellsLarge = [outlierCellsLarge, find([rpCells.Area] > max(opts.cellAreaLim))];
+    outlierCellsLarge = [outlierCellsLarge, find([rpCells.MinorAxisLength] > 46)];
+    outlierCellsLarge = [outlierCellsLarge, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+    outlierCellsLarge = [outlierCellsLarge, find([rpCells.MajorAxisLength] > 115)];
+    outlierCellsLarge = unique(outlierCellsLarge);
 
     prcTile = prcTile - 1;
     
