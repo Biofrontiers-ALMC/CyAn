@@ -28,14 +28,24 @@ classdef DataAnalyzer
             end
             
             data = load(filename);
+
+            obj = import(obj, data);
+            
+        end
+        
+        function obj = import(obj, data)            
             
             obj.tracks = data.tracks;
             obj.metadata = data.metadata;
-            
-            %Fit the data to get the growth rate
+                        
             lineFunc = @(x, xdata) x(1) .* xdata + x(2);
             for trackID = 1:numel(obj.tracks)
+            
+                %--- For tree plotting ---
                 
+                
+                
+                %--- Fit the data to get the growth rate ---
                 time = obj.metadata.Timestamps(obj.tracks(trackID).Frame)';
                 length = cat(1, obj.tracks(trackID).MajorAxisLength{:});
                 
@@ -45,72 +55,69 @@ classdef DataAnalyzer
                 [fitParams, resnorm] = lsqcurvefit(lineFunc, ...
                     [1, lnLen(1)], time, lnLen);
                 
-                
                 obj.tracks(trackID).GrowthRate = fitParams(1);
                 obj.tracks(trackID).GRresnorm = resnorm;
                 
             end
             
-            
         end
         
-        function showtree(obj, trackID)
+        
+        function showtree(obj, rootID)
             %SHOWTREE  Show family tree for specified cell
             
+            %Outline:
+            %  Need ID list, mothers, and height
             
+            [IDs, height] = breadthfirst(DA, 1);
+
             
-            
+                                    
+            plot(nodePos(:, 1), nodePos(:, 2), 'o');
         end        
         
         %--- Tree traversal
         
-        function IDout = breadthfirst(obj, rootID)
+        function [IDlist, height, nodepos] = breadthfirst(obj, rootID)
             %BREADTHFIRST  Perform breadth first traversal
             %
-            %  
+            %  L = BREADTHFIRST(OBJ, ROOTID)
             
-            output = struct('ID', {}, 'X', {}, 'Y', {});
+            %Pre-allocate a queue
+            queue = nan(1, 100);
+            queue(1) = rootID;
             
-            output(1).ID = rootID;
-            output(1).X = [0, 0];
-            output(1).Y = [obj.tracks(output(1).ID).Frame(1), obj.tracks(output(1).ID).Frame(end)];
+            height = nan(1, 100);
+            height(1) = 0;
             
-            queue{1} = rootID;
+            nodepos = nan(100, 2);
+            nodepos(1, :) = [0, obj.tracks(queue(1)).Frame(end)];
             
-            IDout = [];
-            while ~isempty(queue)
+            %Allocate two pointers
+            ptrQcurr = 1;  %Pointer to current position of queue
+            ptrQend = 1;  %Pointer to end of the queue
+            
+            while ~isnan(queue(ptrQcurr))
                 
-                IDout(end + 1) = queue{1};
-                
-                if ~isnan(obj.tracks(queue{1}).DaughterInd)
+                if ~isnan(obj.tracks(queue(ptrQcurr)).DaughterInd)
+                    queue(ptrQend + (1:2)) = obj.tracks(queue(ptrQcurr)).DaughterInd;
+                    height(ptrQend + (1:2)) = height(ptrQcurr) + 1;
+                                        
+                    nodepos(ptrQend + 1, :) = [nodepos(ptrQcurr, 1) - 2^(10 - height(ptrQend + 1)),...
+                        obj.tracks(queue(ptrQend + 1)).Frame(end)];
+                    nodepos(ptrQend + 2, :) = [nodepos(ptrQcurr, 1) + 2^(10 - height(ptrQend + 2)),...
+                        obj.tracks(queue(ptrQend + 2)).Frame(end)];
                     
-                    queue{end + 1} = obj.tracks(queue{1}).DaughterInd(1);
-                    
-                    currIdx = numel(output);
-                    newIdx = currIdx + 1;
-                    output(newIdx).ID = obj.tracks(queue{1}).DaughterInd(1);
-                    
-                    %Need to track height as well
-                    
-                    output(newIdx).X = output(currIdx).X - 
-                    output(newIdx).Y = [obj.tracks(output(1).ID).Frame(1), obj.tracks(output(1).ID).Frame(end)];
-                    
-                    
-                    
-                    queue{end + 1} = obj.tracks(queue{1}).DaughterInd(2);
-                    
-                    
-                    
+                    ptrQend = ptrQend + 2;
                 end
                 
-                queue(1) = [];   
-                
- 
-                
-                
+                ptrQcurr = ptrQcurr + 1;
             end
             
+            IDlist = queue(~isnan(queue));
+            height = height(~isnan(height));
             
+            nodepos(any(isnan(nodepos), 2), :) = [];
         end
         
         function IDout = preorder(obj, rootRID)
