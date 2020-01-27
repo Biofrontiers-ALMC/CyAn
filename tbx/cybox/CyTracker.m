@@ -2433,7 +2433,6 @@ classdef CyTracker < handle
             
         end
 
-
         function maskOut = bgStDevFilter(img, inputMask, thFactor)
             %BGSTDEVFILTER eliminates all objects in mask that are below a
             %given threshold value of standard deviation of pixel greyscale
