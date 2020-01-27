@@ -457,10 +457,10 @@ classdef CyTracker < handle
                     
                     %For 'nicksversion' of segmentation, if using auto
                     %threshold finding
-                    if strcmpi(obj.SegMode, 'nicksversion') && obj.ThresholdLevel == inf
+                    if strcmpi(obj.SegMode, 'CyTracker.nickSeg') && obj.ThresholdLevel == inf
                         obj.ThresholdLevel = findBgStDevThLvl(obj, filename{iFile});
-                    elseif ~strcmpi(obj.SegMode, 'nicksversion') && obj.ThresholdLevel == inf
-                        error('Cannot have infinite threshold level in SegModes other than nicksversion. Change SegMode to nicksversion and use inf threshold level for auto thresholding.')
+                    elseif ~strcmpi(obj.SegMode, 'CyTracker.nickSeg') && obj.ThresholdLevel == inf
+                        error('Cannot have infinite threshold level in SegModes other than CyTracker.nickSeg. Change SegMode to CyTracker.nickSeg and use inf threshold level for auto thresholding.')
                     end
                     
                     for iT = frameRange
@@ -1493,208 +1493,6 @@ classdef CyTracker < handle
                         LL = mask;
                     end
                     
-                case 'nicksversion'
-                    
-                    %This version modified from 'experimental'
-                    
-                    %Pre-process the brightfield image: median filter and
-                    %background subtraction
-                    cellImage = double(cellImage);                    
-                    
-                    bgImage = imopen(cellImage, strel('disk', 40));
-                    cellImageTemp = cellImage - bgImage;
-                    cellImageTemp = imgaussfilt(cellImageTemp, 2);
-                    
-                    %Fit the background
-                    [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
-                    nCnts = smooth(nCnts, 3);
-                    xBins = diff(xBins) + xBins(1:end-1);
-                    
-%                   %Find the peak background
-                    [bgPk, bgPkLoc] = max(nCnts);
-                    
-                    %Find point where counts drop to fraction of peak
-                    thLoc = find(nCnts(bgPkLoc:end) <= bgPk * 0.25, 1, 'first');
-                    thLoc = thLoc + bgPkLoc;
-                    thLvl = xBins(thLoc);
-                    
-                    %Compute initial cell mask
-                    mask = cellImageTemp > thLvl;
-                    mask = imopen(mask, strel('disk', 3));
-                    mask = imclose(mask, strel('disk', 3));
-                    mask = imerode(mask, ones(1));
-                    
-                    %Separate the cell clumps using watershedding
-                    dd = -bwdist(~mask);
-                    dd(~mask) = -Inf;
-                    dd = imhmin(dd, maxCellminDepth);
-                    LL = watershed(dd);
-                    mask(LL == 0) = 0;
-                    
-                    %Tidy up
-                    mask = imclearborder(mask);
-                    mask = bwareaopen(mask, 100);
-                    
-                    %TESTING SOLIDITY
-                    rpCells = regionprops(mask, {'Area','PixelIdxList','Solidity','MajorAxisLength','MinorAxisLength'});
-                    
-                    nonSolidCells = find([rpCells.Solidity] < 0.83 & [rpCells.Solidity] > 0.71 & ...
-                        [rpCells.Area] > 1000 & [rpCells.Area] <= 3500 & ...
-                        [rpCells.MinorAxisLength] > 35);
-                    
-                    for iCell = nonSolidCells
-                    
-                        currMask = false(size(mask));
-                        currMask(rpCells(iCell).PixelIdxList) = true;
-                        thLvl = prctile(cellImage(currMask), 10);
-                        
-                        newMask = cellImage > thLvl;
-                        newMask(~currMask) = 0;
-                        
-                        newMask = imopen(newMask, strel('disk', 3));
-                        newMask = imclose(newMask, strel('disk', 3));
-                        newMask = imerode(newMask, ones(1));
-                        
-                        %Repeat the watershedding
-                        dd = -bwdist(~newMask);
-                        dd(~newMask) = -Inf;
-                        dd = imhmin(dd, maxCellminDepth + 3);
-                        LL = watershed(dd);
-                        newMask(LL == 0) = 0;
-                        
-                        newMask = bwareaopen(newMask, 100);
-                        
-                        %Replace the old masks
-                        mask(currMask) = 0;
-                        mask(currMask) = newMask(currMask);
-                    
-                    end
-                    
-                    mask = bwmorph(mask,'thicken', 8);
-                    
-                    %Filter out all objects with low StDev
-                    mask = CyTracker.bgStDevFilter(cellImageTemp, mask, thFactor);
-                    
-                    %Identify outlier cells and try to split them
-                    rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-                    
-                    %Average area
-                    medianArea = median([rpCells.Area]);                                        
-                    MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-                    outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-                    outlierCells = [outlierCells, find([rpCells.Area] > max(cellAreaLim))];
-                    outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-                    outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-                    outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-                    outlierCells = unique(outlierCells);
-                    
-%                     currPrcTile = 30;
-%                     while ~isempty(outlierCells)
-%                         
-%                         currPrcTile = currPrcTile + 5;
-                        for iCell = outlierCells
-                            
-                            currMask = false(size(mask));
-                            currMask(rpCells(iCell).PixelIdxList) = true;
-                            thLvl = prctile(cellImage(currMask), 40);
-                            
-                            newMask = cellImage > thLvl;
-                            newMask(~currMask) = 0;
-                            
-                            newMask = imopen(newMask, strel('disk', 3));
-                            newMask = imclose(newMask, strel('disk', 3));
-                            newMask = imerode(newMask, ones(1));
-                            
-                            dd = -bwdist(~newMask);
-                            dd(~newMask) = -Inf;
-                            dd = imhmin(dd, maxCellminDepth);
-                            LL = watershed(dd);
-                            newMask(LL == 0) = 0;
-                            
-                            newMask = bwareaopen(newMask, 100);
-                            newMask = bwmorph(newMask,'thicken', 8);
-                            
-                            %For all new cell objects, check stDev
-                            newMask = CyTracker.bgStDevFilter(cellImageTemp, newMask, thFactor);
-                            
-                            %Replace the old masks
-                            mask(currMask) = 0;
-                            mask(currMask) = newMask(currMask);
-                            
-                        end
-                        
-%                         %Then, re-calculate outlier cells. If any exist,
-%                         %repeat local thresholding, but slightly more
-%                         %stringent each time
-%                         outlierCells = [];
-%                         
-%                         %Identify outlier cells and try to split them
-%                         rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-%                         
-%                         %Average area
-%                         medianArea = median([rpCells.Area]);
-%                         MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-%                         outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-%                         outlierCells = [outlierCells, find([rpCells.Area] > max(cellAreaLim))];
-%                         outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-%                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-%                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-%                         outlierCells = unique(outlierCells);
-%                         
-%                     end
-                    
-                    %Do final check for escapee outliers
-                    rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-                    
-                    escapees = find([rpCells.Area] > max(cellAreaLim));
-                    escapees = [escapees, find([rpCells.MinorAxisLength] > 45)];
-                    escapees = [escapees, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-                    escapees = [escapees, find([rpCells.MajorAxisLength] > 115)];
-                    escapees = unique(escapees);
-                    
-                    for iCell = escapees
-                        %Everything is same as above except
-                        %maxCellMinDepth changed to constant of 2
-                        %(lowered).
-                        currMask = false(size(mask));
-                        currMask(rpCells(iCell).PixelIdxList) = true;
-                        thLvl = prctile(cellImage(currMask), 40);
-                        
-                        newMask = cellImage > thLvl;
-                        newMask(~currMask) = 0;
-                        
-                        newMask = imopen(newMask, strel('disk', 3));
-                        newMask = imclose(newMask, strel('disk', 3));
-                        newMask = imerode(newMask, ones(1));
-                        
-                        dd = -bwdist(~newMask);
-                        dd(~newMask) = -Inf;
-                        dd = imhmin(dd, maxCellminDepth-3);
-                        LL = watershed(dd);
-                        newMask(LL == 0) = 0;
-                        
-                        newMask = bwareaopen(newMask, 100);
-                        newMask = bwmorph(newMask,'thicken', 8);
-                        
-                        %Replace the old masks
-                        mask(currMask) = 0;
-                        mask(currMask) = newMask(currMask);
-                        
-                    end
-                    
-                    if ~exportRaw
-                        %Redraw the masks using cylinders
-                        rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
-
-                        LL = CyTracker.drawCapsule(size(mask), rpCells);
-                        
-%                         showoverlay(cellLabels, bwperim(mask));
-%                         keyboard
-                        
-                    else
-                        LL = mask;
-                    end
-                    
                 case 'cy5'
                     
                     %Threshold
@@ -1716,6 +1514,7 @@ classdef CyTracker < handle
                     mask = cellImage > thLvl;
                     
                     mask = activecontour(cellImage, mask);
+                    
                     
                     dd = -bwdist(~mask);
                     dd(~mask) = -Inf;
@@ -1802,7 +1601,7 @@ classdef CyTracker < handle
                     %Call a script. The script must have the following
                     %format:
                     %LABELS = FUNC(cellImage, opts)
-                    %Where opts will be a strucvt containing:
+                    %Where opts will be a struct containing:
                     %thFactor, segMode, maxCellminDepth, cellAreaLim
                     opts.thFactor = thFactor;
                     opts.segMode = segMode;
@@ -2408,6 +2207,232 @@ classdef CyTracker < handle
             
         end
         
+        function maskOut = bgStDevFilter(img, inputMask, thFactor)
+            %BGSTDEVFILTER eliminates all objects in mask that are below a
+            %given threshold value of standard deviation of pixel greyscale
+            %values.
+            %   FINDBGSTDEVTHLVL(img, inputMask) returns an output mask
+            %   containing only objects within the input mask that have a
+            %   standard deviation of pixel greyscale intensities higher
+            %   than thFactor. Standard deviations of pixel
+            %   greyscale values are calculated from the greyscale image,
+            %   img. This threshold value is obtained from
+            %   findBgStDevThLvl, and is used in 'nicksversion' of the
+            %   getCellLabels function for cell segmentation.
+            
+            %Initialize the output mask, starting with nothing filtered.
+            maskOut = inputMask;
+            
+            maskCC = bwconncomp(inputMask);
+            for iObj = 1:maskCC.NumObjects
+                
+                stdObj = std(img(maskCC.PixelIdxList{iObj}));
+                
+                if stdObj < thFactor
+                    maskOut(maskCC.PixelIdxList{iObj}) = 0;
+                end
+            end
+            
+        end
+        
+        function LL = nickSeg(cellImage, opts)
+            
+            %This version modified from 'experimental'
+            
+            %Pre-process the brightfield image: median filter and
+            %background subtraction
+            cellImage = double(cellImage);
+            
+            bgImage = imopen(cellImage, strel('disk', 40));
+            cellImageTemp = cellImage - bgImage;
+            cellImageTemp = imgaussfilt(cellImageTemp, 2);
+            
+            %Fit the background
+            [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
+            nCnts = smooth(nCnts, 3);
+            xBins = diff(xBins) + xBins(1:end-1);
+            
+            %                   %Find the peak background
+            [bgPk, bgPkLoc] = max(nCnts);
+            
+            %Find point where counts drop to fraction of peak
+            thLoc = find(nCnts(bgPkLoc:end) <= bgPk * 0.25, 1, 'first');
+            thLoc = thLoc + bgPkLoc;
+            thLvl = xBins(thLoc);
+            
+            %Compute initial cell mask
+            mask = cellImageTemp > thLvl;
+            mask = imopen(mask, strel('disk', 3));
+            mask = imclose(mask, strel('disk', 3));
+            mask = imerode(mask, ones(1));
+            
+            %Separate the cell clumps using watershedding
+            dd = -bwdist(~mask);
+            dd(~mask) = -Inf;
+            dd = imhmin(dd, opts.maxCellminDepth);
+            LL = watershed(dd);
+            mask(LL == 0) = 0;
+            
+            %Tidy up
+            mask = imclearborder(mask);
+            mask = bwareaopen(mask, 100);
+            
+            %TESTING SOLIDITY
+            rpCells = regionprops(mask, {'Area','PixelIdxList','Solidity','MajorAxisLength','MinorAxisLength'});
+            
+            nonSolidCells = find([rpCells.Solidity] < 0.83 & [rpCells.Solidity] > 0.71 & ...
+                [rpCells.Area] > 1000 & [rpCells.Area] <= 3500 & ...
+                [rpCells.MinorAxisLength] > 35);
+            
+            for iCell = nonSolidCells
+                
+                currMask = false(size(mask));
+                currMask(rpCells(iCell).PixelIdxList) = true;
+                thLvl = prctile(cellImage(currMask), 10);
+                
+                newMask = cellImage > thLvl;
+                newMask(~currMask) = 0;
+                
+                newMask = imopen(newMask, strel('disk', 3));
+                newMask = imclose(newMask, strel('disk', 3));
+                newMask = imerode(newMask, ones(1));
+                
+                %Repeat the watershedding
+                dd = -bwdist(~newMask);
+                dd(~newMask) = -Inf;
+                dd = imhmin(dd, opts.maxCellminDepth + 3);
+                LL = watershed(dd);
+                newMask(LL == 0) = 0;
+                
+                newMask = bwareaopen(newMask, 100);
+                
+                %Replace the old masks
+                mask(currMask) = 0;
+                mask(currMask) = newMask(currMask);
+                
+            end
+            
+            mask = bwmorph(mask,'thicken', 8);
+            
+            %Filter out all objects with low StDev
+            mask = CyTracker.bgStDevFilter(cellImageTemp, mask, opts.thFactor);
+            
+            %Identify outlier cells and try to split them
+            rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
+            
+            %Average area
+            medianArea = median([rpCells.Area]);
+            MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
+            outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
+            outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
+            outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
+            outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+            outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
+            outlierCells = unique(outlierCells);
+            
+            %                     currPrcTile = 30;
+            %                     while ~isempty(outlierCells)
+            %
+            %                         currPrcTile = currPrcTile + 5;
+            for iCell = outlierCells
+                
+                currMask = false(size(mask));
+                currMask(rpCells(iCell).PixelIdxList) = true;
+                thLvl = prctile(cellImage(currMask), 40);
+                
+                newMask = cellImage > thLvl;
+                newMask(~currMask) = 0;
+                
+                newMask = imopen(newMask, strel('disk', 3));
+                newMask = imclose(newMask, strel('disk', 3));
+                newMask = imerode(newMask, ones(1));
+                
+                dd = -bwdist(~newMask);
+                dd(~newMask) = -Inf;
+                dd = imhmin(dd, opts.maxCellminDepth);
+                LL = watershed(dd);
+                newMask(LL == 0) = 0;
+                
+                newMask = bwareaopen(newMask, 100);
+                newMask = bwmorph(newMask,'thicken', 8);
+                
+                %For all new cell objects, check stDev
+                newMask = CyTracker.bgStDevFilter(cellImageTemp, newMask, opts.thFactor);
+                
+                %Replace the old masks
+                mask(currMask) = 0;
+                mask(currMask) = newMask(currMask);
+                
+            end
+            
+            %                         %Then, re-calculate outlier cells. If any exist,
+            %                         %repeat local thresholding, but slightly more
+            %                         %stringent each time
+            %                         outlierCells = [];
+            %
+            %                         %Identify outlier cells and try to split them
+            %                         rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
+            %
+            %                         %Average area
+            %                         medianArea = median([rpCells.Area]);
+            %                         MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
+            %                         outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
+            %                         outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
+            %                         outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
+            %                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+            %                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
+            %                         outlierCells = unique(outlierCells);
+            %
+            %                     end
+            
+            %Do final check for escapee outliers
+            rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
+            
+            escapees = find([rpCells.Area] > max(opts.cellAreaLim));
+            escapees = [escapees, find([rpCells.MinorAxisLength] > 45)];
+            escapees = [escapees, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
+            escapees = [escapees, find([rpCells.MajorAxisLength] > 115)];
+            escapees = unique(escapees);
+            
+            for iCell = escapees
+                %Everything is same as above except
+                %maxCellMinDepth changed to constant of 2
+                %(lowered).
+                currMask = false(size(mask));
+                currMask(rpCells(iCell).PixelIdxList) = true;
+                thLvl = prctile(cellImage(currMask), 40);
+                
+                newMask = cellImage > thLvl;
+                newMask(~currMask) = 0;
+                
+                newMask = imopen(newMask, strel('disk', 3));
+                newMask = imclose(newMask, strel('disk', 3));
+                newMask = imerode(newMask, ones(1));
+                
+                dd = -bwdist(~newMask);
+                dd(~newMask) = -Inf;
+                dd = imhmin(dd, opts.maxCellminDepth-3);
+                LL = watershed(dd);
+                newMask(LL == 0) = 0;
+                
+                newMask = bwareaopen(newMask, 100);
+                newMask = bwmorph(newMask,'thicken', 8);
+                
+                %Replace the old masks
+                mask(currMask) = 0;
+                mask(currMask) = newMask(currMask);
+                
+            end
+            
+            %Final elimination of small cells
+            mask = bwareaopen(mask, 100);
+            
+            %Redraw the masks using cylinders
+            rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+            mask = CyTracker.drawCapsule(size(mask), rpCells);
+            
+        end
+
     end
     
     methods (Access = private)

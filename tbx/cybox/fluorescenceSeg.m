@@ -1,4 +1,5 @@
 function LL = fluorescenceSeg(I, opts)
+keyboard
 mask = I > max(I(:))/ opts.thFactor;
 mask = bwareaopen(mask, 300);
 
@@ -10,5 +11,9 @@ dd = imhmin(dd, 50);
 
 LL = watershed(dd);
 LL = LL - 1;
+
+%Redraw the masks using cylinders
+% rpCells = regionprops(LL,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+% LL = CyTracker.drawCapsule(size(LL), rpCells);
 
 end
