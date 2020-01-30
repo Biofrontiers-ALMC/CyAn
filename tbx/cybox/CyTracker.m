@@ -705,7 +705,7 @@ classdef CyTracker < handle
                             dotImg = dotLabels > 0;
                             
                         else
-                            dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
+                            dotImg = bfReader.getPlane(1, opts.SpotChannel, frame);
                             
                             %Run dot finding algorithm
                             dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
@@ -865,7 +865,6 @@ classdef CyTracker < handle
                 end
             end
         end
-        
         
         function trackFile(filename, outputDir, opts)
             %TRACKFILE  Run segmentation and tracking for a selected file
@@ -2432,35 +2431,7 @@ classdef CyTracker < handle
             mask = CyTracker.drawCapsule(size(mask), rpCells);
             
         end
-
-        function maskOut = bgStDevFilter(img, inputMask, thFactor)
-            %BGSTDEVFILTER eliminates all objects in mask that are below a
-            %given threshold value of standard deviation of pixel greyscale
-            %values.
-            %   FINDBGSTDEVTHLVL(img, inputMask) returns an output mask
-            %   containing only objects within the input mask that have a
-            %   standard deviation of pixel greyscale intensities higher
-            %   than thFactor. Standard deviations of pixel
-            %   greyscale values are calculated from the greyscale image,
-            %   img. This threshold value is obtained from
-            %   findBgStDevThLvl, and is used in 'nicksversion' of the
-            %   getCellLabels function for cell segmentation.
-            
-            %Initialize the output mask, starting with nothing filtered.
-            maskOut = inputMask;
-            
-            maskCC = bwconncomp(inputMask);
-            for iObj = 1:maskCC.NumObjects
-                
-                stdObj = std(img(maskCC.PixelIdxList{iObj}));
-                
-                if stdObj < thFactor
-                    maskOut(maskCC.PixelIdxList{iObj}) = 0;
-                end
-            end
-            
-        end
-
+        
     end
     
     methods (Access = private)
@@ -2475,5 +2446,5 @@ classdef CyTracker < handle
         end
         
     end
-    
+        
 end
