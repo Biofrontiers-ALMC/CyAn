@@ -705,7 +705,7 @@ classdef CyTracker < handle
                             dotImg = dotLabels > 0;
                             
                         else
-                            dotImg = bfReader.getPlane(1, opts.SpotChannel, iT);
+                            dotImg = bfReader.getPlane(1, opts.SpotChannel, frame);
                             
                             %Run dot finding algorithm
                             dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
