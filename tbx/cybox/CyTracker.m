@@ -909,7 +909,7 @@ classdef CyTracker < handle
                 
                 for frame = frameRange
                  
-                    iT = frame + opts.frameOffset;                    
+                    iT = frame;                    
                     
                     %Read in the image
                     if ~iscell(opts.ChannelToSegment)
