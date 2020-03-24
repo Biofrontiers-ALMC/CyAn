@@ -1,29 +1,17 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="2932180599" file="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack.prj" location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
-    <param.appname>CyTrack (v1.2.3)</param.appname>
+  <configuration build-checksum="2932180599" file="D:\Projects\cyanobacteria-toolbox\build\CyTrack.prj" location="D:\Projects\cyanobacteria-toolbox\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
+    <param.appname>CyTrack (v1.3.0)</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
     <param.summary>Segmentation and Tracking code for Cyanobacteria</param.summary>
     <param.description>Please see wiki for usage instructions: https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home</param.description>
     <param.screenshot />
-    <param.version>1.2.3</param.version>
-    <param.output>${PROJECT_ROOT}\CyTrack (v1.2.3).mltbx</param.output>
-    <param.products.name>
-      <item>MATLAB</item>
-      <item>Computer Vision System Toolbox</item>
-      <item>Curve Fitting Toolbox</item>
-    </param.products.name>
-    <param.products.id>
-      <item>1</item>
-      <item>96</item>
-      <item>60</item>
-    </param.products.id>
-    <param.products.version>
-      <item>9.4</item>
-      <item>8.1</item>
-      <item>3.5.7</item>
-    </param.products.version>
+    <param.version>1.3.0</param.version>
+    <param.output>${PROJECT_ROOT}\CyTrack (v1.3.0).mltbx</param.output>
+    <param.products.name />
+    <param.products.id />
+    <param.products.version />
     <param.platforms />
     <param.guid>11dead0a-728c-4a7b-b238-1680d6efddb0</param.guid>
     <param.exclude.filters />
@@ -37,6 +25,13 @@
     <param.matlabpath.excludes />
     <param.javaclasspath.excludes />
     <param.exported.on.package>false</param.exported.on.package>
+    <param.required.addons>
+      <requiredaddons>
+        <requiredAddOn downloadURL="" earliest="earliest" fromRepository="false" id="f27de8de-7bd2-4c9e-8c48-10d517608753" include="false" latest="latest">Bioformats Image Toolbox (v1.1.0)</requiredAddOn>
+      </requiredaddons>
+    </param.required.addons>
+    <param.matlab.project.id />
+    <param.matlab.project.name />
     <param.release.start />
     <param.release.end />
     <param.release.current.only>false</param.release.current.only>
@@ -44,12 +39,21 @@
     <param.compatiblity.macos>true</param.compatiblity.macos>
     <param.compatiblity.linux>true</param.compatiblity.linux>
     <param.compatiblity.matlabonline>true</param.compatiblity.matlabonline>
+    <param.installation.map />
+    <param.additional.sw.names />
+    <param.additional.sw.licenses />
+    <param.additional.sw.win.url />
+    <param.additional.sw.mac.url />
+    <param.additional.sw.linux.url />
     <unset>
       <param.authnamewatermark />
       <param.email />
       <param.company />
       <param.screenshot />
       <param.output />
+      <param.products.name />
+      <param.products.id />
+      <param.products.version />
       <param.platforms />
       <param.exclude.filters />
       <param.exclude.pcodedmfiles />
@@ -62,6 +66,8 @@
       <param.matlabpath.excludes />
       <param.javaclasspath.excludes />
       <param.exported.on.package />
+      <param.matlab.project.id />
+      <param.matlab.project.name />
       <param.release.start />
       <param.release.end />
       <param.release.current.only />
@@ -69,29 +75,39 @@
       <param.compatiblity.macos />
       <param.compatiblity.linux />
       <param.compatiblity.matlabonline />
+      <param.installation.map />
+      <param.additional.sw.names />
+      <param.additional.sw.licenses />
+      <param.additional.sw.win.url />
+      <param.additional.sw.mac.url />
+      <param.additional.sw.linux.url />
     </unset>
     <fileset.rootdir>
-      <file>D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\tbx</file>
+      <file>D:\Projects\cyanobacteria-toolbox\tbx</file>
     </fileset.rootdir>
     <fileset.rootfiles>
-      <file>D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\tbx\cybox</file>
+      <file>D:\Projects\cyanobacteria-toolbox\tbx\cybox</file>
     </fileset.rootfiles>
-    <fileset.depfun.included>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackData.m</file>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackDataArray.m</file>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackLinker.m</file>
-    </fileset.depfun.included>
+    <fileset.depfun.included />
     <fileset.depfun.excluded>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.0.4b)\code\BioformatsImage\BioformatsImage.m</file>
-      <file>D:\Jian\Documents\MATLAB\showoverlay.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfGetPlane.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfGetReader.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\private\is_octave.m</file>
+      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\BioformatsImage.m</file>
+      <file>D:\Jian\Documents\MATLAB\imp-toolbox\showoverlay.m</file>
+      <file>D:\Projects\2019Aug Cameron CyAn\code\tbx\CyTracker.m</file>
+      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
+      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack (v1.2.3).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.2.3).mltbx</file>
+      <file location="${PROJECT_ROOT}" name="CyTrack (v1.3.0).mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\build\CyTrack (v1.3.0).mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
-      <root>C:\Program Files\MATLAB\R2018a</root>
+      <root>C:\Program Files\MATLAB\R2019a</root>
       <toolboxes />
     </matlab>
     <platform>
