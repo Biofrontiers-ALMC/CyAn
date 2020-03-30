@@ -941,7 +941,7 @@ classdef CyTracker < handle
                         
                     else
                         %Load the masks
-                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_masks.tif',currfilename, 1)),'Index', frame);
+                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_cellMask.tif',currfilename, 1)),'Index', frame);
                         
                         mask = mask > 0;
                         %mask = ~mask;
@@ -1033,25 +1033,24 @@ classdef CyTracker < handle
                             Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
                                 'TimestampUnits', tsunit);
                             
-                        else
+                        end
+                        
+                        try
+                            %Link data to existing tracks
+                            Linker = Linker.assignToTrack(iT, cellData);
+                        catch ME
                             
-                            try
-                                %Link data to existing tracks
-                                Linker = Linker.assignToTrack(iT, cellData);
-                            catch ME
-                                
-                                keyboard
-                                %Handle errors
-                                fprintf('Error linking at frame %d\n', iT);
-                                
-                                saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
-                                if strcmpi(saveData,'y')
-                                    tracks = LAPLinker.tracks;
-                                    metadata = LAPLinker.metadata;
-                                    save([saveFN, '.mat'], 'tracks', 'metadata');
-                                end
-                                rethrow(ME)
+                            keyboard
+                            %Handle errors
+                            fprintf('Error linking at frame %d\n', iT);
+                            
+                            saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
+                            if strcmpi(saveData,'y')
+                                tracks = LAPLinker.tracks;
+                                metadata = LAPLinker.metadata;
+                                save([saveFN, '.mat'], 'tracks', 'metadata');
                             end
+                            rethrow(ME)
                         end
                         
                         %Write movie file (if OutputMovie was set)
