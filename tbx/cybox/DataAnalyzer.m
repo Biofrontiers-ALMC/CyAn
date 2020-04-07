@@ -63,7 +63,7 @@ classdef DataAnalyzer < TrackArray
             for ii = 1:numel(obj.Tracks)
                 
                 %--- Calculate Growth Rate ---%
-                tt = (obj.Tracks(ii).Frames) * meanDeltaT;
+                tt = (obj.Tracks(ii).Frames) * obj.MeanDeltaT;
                 
                 %Replace empty values (for skipped frames) with NaNs
                 len = obj.Tracks(ii).Data.MajorAxisLength;
@@ -73,7 +73,7 @@ classdef DataAnalyzer < TrackArray
                     len{idxEmpty(iC)} = NaN;
                 end
                 
-                len = cell2mat(len) * obj.FileMetadata.PxSize(1);
+                len = cell2mat(len) * obj.FileMetadata.PhysicalPxSize(1);
                 
                 [obj.Tracks(ii).GrowthRate, obj.Tracks(ii).GRFitY, obj.Tracks(ii).GRFitRes] = ...
                     DataAnalyzer.fitGrowthRate(tt, len);

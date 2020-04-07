@@ -27,6 +27,8 @@ classdef CyTracker < handle
         ChannelToRegister = 'Cy5';
         SaveMasks = false;
         
+        ImageReader = 'bioformats';  %Or 'nd2sdk'
+        
         %Segmentation options
         ChannelToSegment = '';
         SegMode char = '';
@@ -433,7 +435,11 @@ classdef CyTracker < handle
                 
                 [~, currFN] = fileparts(filename{iFile});
                 
-                bfr = BioformatsImage(filename{iFile});
+                if strcmpi(obj.ImageReader, 'nd2sdk')
+                    bfr = ND2reader(filename{iFile});
+                else
+                    bfr = BioformatsImage(filename{iFile});
+                end
                 
                 if obj.SwapZandT
                     bfr.swapZandT = true;                    
@@ -464,7 +470,6 @@ classdef CyTracker < handle
                     elseif ~strcmpi(obj.SegMode, 'nicksversion') && obj.ThresholdLevel == inf
                         error('Cannot have infinite threshold level in SegModes other than nicksversion. Change SegMode to nicksversion and use inf threshold level for auto thresholding.')
                     end
-                    bfReader = BioformatsImage(filename{iFile});
                     
                     for iT = frameRange
                         
@@ -473,9 +478,9 @@ classdef CyTracker < handle
                             opts.ChannelToSegment = {opts.ChannelToSegment};
                         end
                         
-                        imgToSegment = zeros(bfReader.height, bfReader.width, numel(opts.ChannelToSegment), 'uint16');
+                        imgToSegment = zeros(bfr.height, bfr.width, numel(opts.ChannelToSegment), 'uint16');
                         for iC = 1:numel(opts.ChannelToSegment)
-                            imgToSegment(:, :, iC) = (bfReader.getPlane(1, opts.ChannelToSegment{iC}, iT));
+                            imgToSegment(:, :, iC) = (bfr.getPlane(1, opts.ChannelToSegment{iC}, iT));
                         end
                         
                         
@@ -652,7 +657,11 @@ classdef CyTracker < handle
             %  by using the (private) getOptions function.
             
             %Get a reader object for the image
-            bfReader = BioformatsImage(filename);
+            if strcmpi(opts.ImageReader, 'nd2sdk')
+                bfReader = ND2reader(filename);            
+            else
+                bfReader = BioformatsImage(filename);
+            end
             
             %Set the frame range to process
             if isinf(opts.FrameRange)
