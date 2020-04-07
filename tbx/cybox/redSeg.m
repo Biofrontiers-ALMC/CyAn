@@ -91,6 +91,9 @@ end
 largeCellMask = bwareaopen(mask, max(opts.cellAreaLim) * 2);
 mask(largeCellMask) = false;
 
+%Remove regions that are too small to be a cell
+mask = bwareaopen(mask, min(opts.cellAreaLim));
+
 %Draw as cylinders
 rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
 LL = CyTracker.drawCapsule(size(mask), rpCells);
