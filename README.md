@@ -12,7 +12,7 @@ Welcome to the CyTo, a MATLAB toolbox for analysis of cyanobacteria images and r
 1. Download the following toolboxes:
   - [BioformatsImage Toolbox](https://biof-git.colorado.edu/biofrontiers-imaging/bioformats-image-toolbox/wikis/home) v1.1.0 or higher
   - [Linear Assignment Tracking Toolbox](https://biof-git.colorado.edu/biofrontiers-imaging/lap-cell-tracker/wikis/user-guide) v 2.0.0 or higher
-  - [Cyanobacteria toolbox (this project)]https://drive.google.com/drive/folders/1u6vJAxjkEGIhjn-iDMLWqo0iL23ihGDy) (access permission is required) latest version
+  - [Cyanobacteria toolbox (this project)](https://drive.google.com/drive/folders/1u6vJAxjkEGIhjn-iDMLWqo0iL23ihGDy) (access permission is required) latest version
 2. Install the toolboxes by opening the downloaded files in MATLAB. To check if the toolbox is installed correctly, open the Add-On Manager: In the Home tab, select *Add-Ons* > *Manage Add-Ons*. The
 toolboxes should be listed.
 
