@@ -23,9 +23,11 @@ classdef CyTracker < handle
         UseMasks logical = false;
         InputMaskDir char = '';
                 
-        RegisterImages = false;
+        RegisterImages logical = false;
         ChannelToRegister = 'Cy5';
-        SaveMasks = false;
+        SaveMasks logical = false;
+        
+        ImageReader = 'bioformats';  %Or 'nd2sdk'
         
         %Segmentation options
         ChannelToSegment = '';
@@ -57,12 +59,11 @@ classdef CyTracker < handle
         MaxTrackAge double = 2;
         
         %Mitosis detection parameters
-        TrackMitosis logical = true;
-        MinAgeSinceMitosis double = 2;
-        MitosisParameter char = 'PixelIdxList';          %What property is used for mitosis detection?
-        MitosisCalculation char = 'pxintersect';
-        MitosisScoreRange(1,2) double = [1, 8];
-        MitosisLinkToFrame double = -1;                    %What frame to link to/ This should be 0 for centroid/nearest neighbor or -1 for overlap (e.g. check with mother cell)
+        TrackDivision logical = true;
+        MinAgeSinceDivision double = 2;
+        DivisionParameter char = 'PixelIdxList';          %What property is used for mitosis detection?
+        DivisionCalculation char = 'pxintersect';
+        DivisionScoreRange(1,2) double = [1, 8];
         LAPSolver char = 'lapjv';
         
         %Parallel processing options
@@ -97,7 +98,9 @@ classdef CyTracker < handle
                 %If input is empty, prompt user to select file(s) and
                 %output directory
                 
-                [fname, fpath] = uigetfile({'*.nd2','ND2 file (*.nd2)'},...
+                [fname, fpath] = uigetfile({'*.nd2; *.tif; *.tiff', 'Image files (*.nd2; *.tif; *.tiff)'; ...
+                    '*.nd2','ND2 files (*.nd2)';...
+                    '*.tif; *.tiff', 'TIFF files (*.tif; *.tiff)'},...
                     'Select a file','multiSelect','on');
                 
                 if isequal(fname,0) || isequal(fpath,0)
@@ -428,10 +431,17 @@ classdef CyTracker < handle
             end
             
             for iFile = 1:numel(filename)                
+                fprintf('%s: Exporting masks of file %s\n', ...
+                    datestr(now), filename{iFile});
+                
                 
                 [~, currFN] = fileparts(filename{iFile});
                 
-                bfr = BioformatsImage(filename{iFile});
+                if strcmpi(obj.ImageReader, 'nd2sdk')
+                    bfr = ND2reader(filename{iFile});
+                else
+                    bfr = BioformatsImage(filename{iFile});
+                end
                 
                 if obj.SwapZandT
                     bfr.swapZandT = true;                    
@@ -465,9 +475,20 @@ classdef CyTracker < handle
                     
                     for iT = frameRange
                         
+                        %Read in the image
+                        if ~iscell(opts.ChannelToSegment)
+                            opts.ChannelToSegment = {opts.ChannelToSegment};
+                        end
+                        
+                        imgToSegment = zeros(bfr.height, bfr.width, numel(opts.ChannelToSegment), 'uint16');
+                        for iC = 1:numel(opts.ChannelToSegment)
+                            imgToSegment(:, :, iC) = (bfr.getPlane(1, opts.ChannelToSegment{iC}, iT));
+                        end
+                        
+                        
                         %Segment the cells
                         currCellMask = CyTracker.getCellLabels(...
-                            bfr.getPlane(1, obj.ChannelToSegment, iT), ...
+                            imgToSegment, ...
                             obj.ThresholdLevel, obj.SegMode, ...
                             obj.MaxCellMinDepth, obj.CellAreaLim, exportRaw);
                         
@@ -488,7 +509,7 @@ classdef CyTracker < handle
                             outputImg = uint8(double(imgToExport)./double(max(imgToExport(:))) .* 255);
                             
                             %Write to TIFF stack
-                            maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_masks.tif', currFN, iSeries));
+                            maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_cellMask.tif', currFN, iSeries));
                             imageOutputFN = fullfile(outputDir, sprintf('%s_series%d_cy5.tif', currFN, iSeries));
                             
                             if iT == frameRange(1)
@@ -523,7 +544,7 @@ classdef CyTracker < handle
             end
             
         end
-       
+
         function mergeprocess(obj, varargin)
             %MERGEPROCESS  Merge and process two files
             %
@@ -558,7 +579,7 @@ classdef CyTracker < handle
                 else
                     fname = {fullfile(fpath,fname)};
                 end
-               
+                
                 %Prompt for mask directory
                 if obj.UseMasks && isempty(obj.InputMaskDir)
                     obj.InputMaskDir = uigetdir(fileparts(fname{1}), 'Select mask directory');
@@ -566,7 +587,7 @@ classdef CyTracker < handle
                     if isequal(obj.InputMaskDir,0)
                         return;
                     end
-                end                
+                end
                 
                 %Get output directory
                 outputDir = uigetdir(fileparts(fname{1}), 'Select output directory');
@@ -580,7 +601,7 @@ classdef CyTracker < handle
                 %Check that the last argument is not a file (i.e. has no
                 %.ext)
                 [~, ~, lastFext] = fileparts(varargin{end});
-                if ~isempty(lastFext)                    
+                if ~isempty(lastFext)
                     error('CyTracker:OutputDirNeeded', ...
                         'An output directory must be specified.')
                 end
@@ -591,7 +612,7 @@ classdef CyTracker < handle
                     error('CyTracker:InputMaskDirNotSet', ...
                         'The InputMaskDir property must be set to the mask path.')
                 end
-                                
+                
                 fname = varargin(1:end - 1);
                 
                 outputDir = varargin{end};
@@ -599,13 +620,13 @@ classdef CyTracker < handle
                 if isempty(outputDir)
                     %If dir was empty, then use the current dir as the
                     %output path
-                    outputDir = pwd;                    
+                    outputDir = pwd;
                 end
                 
                 if ~exist(outputDir, 'dir')
-                    mkdir(outputDir);                    
+                    mkdir(outputDir);
                 end
-                                
+                
             else
                 error('CyTracker:InsufficientInputs', ...
                     'Expected number of inputs to be zero or a minimum of 2.')
@@ -614,6 +635,12 @@ classdef CyTracker < handle
             %Compile the options into a struct
             options = obj.getOptions;           
 
+            %Process the files
+            CyTracker.trackFileMerge(fname, outputDir, options);
+            
+            %Compile the options into a struct
+            options = obj.getOptions;
+            
             %Process the files
             CyTracker.trackFileMerge(fname, outputDir, options);
             
@@ -878,7 +905,11 @@ classdef CyTracker < handle
             %  by using the (private) getOptions function.
             
             %Get a reader object for the image
-            bfReader = BioformatsImage(filename);
+            if strcmpi(opts.ImageReader, 'nd2sdk')
+                bfReader = ND2reader(filename);            
+            else
+                bfReader = BioformatsImage(filename);
+            end
             
             %Set the frame range to process
             if isinf(opts.FrameRange)
@@ -907,10 +938,8 @@ classdef CyTracker < handle
                 
                 %--- Start tracking ---%
                 
-                for frame = frameRange
+                for iT = frameRange
                  
-                    iT = frame;                    
-                    
                     %Read in the image
                     if ~iscell(opts.ChannelToSegment)
                        opts.ChannelToSegment = {opts.ChannelToSegment}; 
@@ -939,7 +968,7 @@ classdef CyTracker < handle
                         
                     else
                         %Load the masks
-                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%dcellMask.tif',fname, iSeries)),'Index', iT);
+                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_cellMask.tif',fname, iSeries)),'Index', iT);
                         
                         mask = mask > 0;
                         %mask = ~mask;
@@ -983,7 +1012,6 @@ classdef CyTracker < handle
                         regImg = bfReader.getPlane(1, opts.ChannelToRegister, iT);
                         if exist('prevImage', 'var')
                             pxShift = CyTracker.xcorrreg(prevImage, regImg);
-                            
                             regImg = CyTracker.shiftimg(regImg, pxShift);
                         end
                         
@@ -1009,47 +1037,54 @@ classdef CyTracker < handle
                             Linker.LinkCostMetric = opts.LinkCalculation;
                             Linker.LinkScoreRange = opts.LinkingScoreRange;
                             Linker.MaxTrackAge = opts.MaxTrackAge;
-                            Linker.TrackDivision = opts.TrackMitosis;
-                            Linker.DivisionParameter = opts.MitosisParameter;
-                            Linker.DivisionScoreMetric = opts.MitosisCalculation;
-                            Linker.DivisionScoreRange = opts.MitosisScoreRange;
-                            Linker.MinFramesBetweenDiv = opts.MinAgeSinceMitosis;
-                            
-                            %Add the first dataset
-                            Linker = assignToTrack(Linker, iT, cellData);
+                            Linker.TrackDivision = opts.TrackDivision;
+                            Linker.DivisionParameter = opts.DivisionParameter;
+                            Linker.DivisionScoreMetric = opts.DivisionCalculation;
+                            Linker.DivisionScoreRange = opts.DivisionScoreRange;
+                            Linker.MinFramesBetweenDiv = opts.MinAgeSinceDivision;
                             
                             %Write file metadata
-                            Linker = updateMetadata(Linker, 'Filename', bfReader.filename);
-                            Linker = updateMetadata(Linker, 'PhysicalPxSize', bfReader.pxSize);
-                            Linker = updateMetadata(Linker, 'PhysicalPxSizeUnits', bfReader.pxUnits);
-                            Linker = updateMetadata(Linker, 'ImageSize', [bfReader.height, bfReader.width]);                            
-                            Linker = updateMetadata(Linker, 'ProcessingSettings', opts);
+                            Linker = updateMetadata(Linker, 'Filename', bfReader.filename, ...
+                                'PhysicalPxSize', bfReader.pxSize, ...
+                                'PhysicalPxSizeUnits', bfReader.pxUnits, ...
+                                'ImageSize', [bfReader.height, bfReader.width], ...
+                                'ProcessingSettings', opts);
        
                             %Add timestamp information
-                            [ts, tsunit] = bfReader.getTimestamps(1,1);
-                            Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange));
-                            Linker = updateMetadata(Linker, 'TimestampUnits', tsunit);
-                            
-                        else
-                            
-                            try
-                                %Link data to existing tracks
-                                Linker = Linker.assignToTrack(iT, cellData);
-                            catch ME
+                            %Handle TIFF files
+                            [~, ~, fExt] = fileparts(filename);
+                            switch lower(fExt)
                                 
-                                keyboard
-                                %Handle errors
-                                fprintf('Error linking at frame %d\n', iT);
-                                
-                                saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
-                                if strcmpi(saveData,'y')
-                                    tracks = LAPLinker.tracks;
-                                    metadata = LAPLinker.metadata;
-                                    save([saveFN, '.mat'], 'tracks', 'metadata');
-                                end
-                                rethrow(ME)
+                                case {'.tif', '.tiff'}
+                                    %Do not add timestamps
+                                    
+                                otherwise
+                                    [ts, tsunit] = bfReader.getTimestamps(1,1);
+                                    Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
+                                        'TimestampUnits', tsunit);
+                         
                             end
+        
                         end
+                        
+                            
+                        try
+                            %Link data to existing tracks
+                            Linker = assignToTrack(Linker, iT, cellData);
+                        catch ME
+                            
+                            %Handle errors
+                            fprintf('Error linking at frame %d\n', iT);
+                            
+                            saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
+                            if strcmpi(saveData,'y')
+                                tracks = LAPLinker.tracks;
+                                metadata = LAPLinker.metadata;
+                                save([saveFN, '.mat'], 'tracks', 'metadata');
+                            end
+                            rethrow(ME)
+                        end
+                        
                         
                         %Write movie file (if OutputMovie was set)
                         if opts.OutputMovie
@@ -1096,8 +1131,8 @@ classdef CyTracker < handle
                 
                 %Save the track array
                 tracks = Linker.tracks;
-                metadata = Linker.metadata;
-                save([saveFN, '.mat'], 'tracks', 'metadata');
+
+                save([saveFN, '.mat'], 'tracks');
                 
                 %Close video objects
                 if exist('vidObj','var')
@@ -1109,10 +1144,249 @@ classdef CyTracker < handle
                         clear spotVidObj
                     end
                 end
+
             end
             
         end
         
+        function trackFileMerge(filename, outputDir, opts)
+            %TRACKFILE  Run segmentation and tracking for a selected file
+            %
+            %  TRACKFILE(FILENAME, OUTPUTDIR, OPTS) will run the processing
+            %  for the FILENAME specified. OUTPUTDIR should be the path to
+            %  the output directory, and OPTS should be a struct containing
+            %  the settings for segmentation and tracking.
+            %
+            %  The OPTS struct can be constructed from a CYTRACKER object
+            %  by using the (private) getOptions function.
+            
+            frameOffset = 0;
+            
+            %--- Start processing ---%               
+            %Generate the common output filename (no extension)
+            [~, fname] = fileparts(filename{1});
+            saveFN = fullfile(outputDir, sprintf('%s_merged',fname));
+            
+            for iF = 1:numel(filename)
+                
+                [~, currfilename] = fileparts(filename{iF});
+                
+                
+                %Get a reader object for the image
+                bfReader = BioformatsImage(filename{iF});
+                
+                %Set the frame range to process
+                frameRange = 1:bfReader.sizeT;
+                
+                %--- Start tracking ---%
+                for frame = frameRange
+                    
+                    iT = frame + frameOffset;
+                    
+                    %Read in the image
+                    if ~iscell(opts.ChannelToSegment)
+                        opts.ChannelToSegment = {opts.ChannelToSegment};
+                    end
+                    
+                    imgToSegment = zeros(bfReader.height, bfReader.width, numel(opts.ChannelToSegment), 'uint16');
+                    for iC = 1:numel(opts.ChannelToSegment)
+                        imgToSegment(:, :, iC) = (bfReader.getPlane(1, opts.ChannelToSegment{iC}, frame));
+                    end
+                    
+                    if ~opts.UseMasks
+                        %Segment the cells
+                        cellLabels = CyTracker.getCellLabels(imgToSegment, ...
+                            opts.ThresholdLevel, opts.SegMode,...
+                            opts.MaxCellMinDepth, opts.CellAreaLim);
+                        
+                        %Write masks to file
+                        if opts.SaveMasks
+                            if iT == frameRange(1)
+                                imwrite(cellLabels, [saveFN, 'cellMask.tif'], 'Compression', 'None');
+                            else
+                                imwrite(cellLabels, [saveFN, 'cellMask.tif'], ...
+                                    'Compression', 'None', 'WriteMode', 'append');
+                            end
+                        end
+                        
+                    else
+                        %Load the masks
+                        mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_cellMask.tif',currfilename, 1)),'Index', frame);
+                        
+                        mask = mask > 0;
+                        %mask = ~mask;
+                        
+                        cellLabels = labelmatrix(bwconncomp(mask(:,:,1)));
+                    end
+                    
+                    %Run spot detection if the SpotChannel property is set
+                    if ~isempty(opts.SpotChannel)
+                        
+                        if opts.UseSpotMask
+                            %Load the spot masks
+                            dotLabels = imread(fullfile(opts.SpotMaskDir, sprintf('%s_series%d_spotMask.tif',currfilename, 1)),'Index', iT);
+                            dotImg = dotLabels > 0;
+                            
+                        else
+                            dotImg = bfReader.getPlane(1, opts.SpotChannel, frame);
+                            
+                            %Run dot finding algorithm
+                            dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
+                            
+                            if opts.SaveMasks
+                                if iT == frameRange(1)
+                                    imwrite(dotLabels, [saveFN, 'spotMask.tif'], ...
+                                        'Compression', 'None', 'WriteMode', 'append');
+                                else
+                                    imwrite(dotLabels, [saveFN, 'spotMask.tif'], ...
+                                        'Compression', 'None', 'WriteMode', 'append');
+                                end
+                            end
+                        end
+                    else
+                        dotLabels = [];
+                    end
+                    
+                    %Compute the pixel shift to register image
+                    if opts.RegisterImages
+                        
+                        pxShift = [0 0];
+                        
+                        %Get the image to register against. Works best for
+                        %Cy5 fluorescence channel.
+                        regImg = bfReader.getPlane(1, opts.ChannelToRegister, frame);
+                        
+                        if exist('prevImage', 'var')
+                            pxShift = CyTracker.xcorrreg(prevImage, regImg);
+                            %pxShiftTotal = pxShiftTotal - pxShift;
+                            regImg = CyTracker.shiftimg(regImg, pxShift);
+                        end
+                        
+                        %Store the image as a reference
+                        prevImage = regImg;
+                        
+                    else
+                        pxShift = [];
+                    end
+                    
+                    %Run the measurement function
+                    cellData = CyTracker.measure(cellLabels, dotLabels, bfReader, frame, pxShift);
+                    
+                    %Add detected objects to tracks
+                    if numel(cellData) == 0
+                        %Skip if no cells were found
+                        warning('CyTracker:NoCellsFound', '%s (frame %d): Cell mask was empty.',saveFN, frame);
+                    else
+                        if ~exist('Linker', 'var')
+                            
+                            %Initialize a new object for tracking
+                            Linker = LAPLinker;
+                            Linker.LinkedBy = opts.LinkedBy;
+                            Linker.LinkCostMetric = opts.LinkCalculation;
+                            Linker.LinkScoreRange = opts.LinkingScoreRange;
+                            Linker.MaxTrackAge = opts.MaxTrackAge;
+                            Linker.TrackDivision = opts.TrackDivision;
+                            Linker.DivisionParameter = opts.DivisionParameter;
+                            Linker.DivisionScoreMetric = opts.DivisionCalculation;
+                            Linker.DivisionScoreRange = opts.DivisionScoreRange;
+                            Linker.MinFramesBetweenDiv = opts.MinAgeSinceDivision;
+                            
+                            %Write file metadata
+                            Linker = updateMetadata(Linker, 'Filename', bfReader.filename, ...
+                                'PhysicalPxSize', bfReader.pxSize, ...
+                                'PhysicalPxSizeUnits', bfReader.pxUnits, ...
+                                'ImageSize', [bfReader.height, bfReader.width], ...
+                                'ProcessingSettings', opts);
+                            
+                            %Add timestamp information
+                            [ts, tsunit] = bfReader.getTimestamps(1,1);
+                            Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
+                                'TimestampUnits', tsunit);
+                            
+                        end
+                        
+                        try
+                            %Link data to existing tracks
+                            Linker = Linker.assignToTrack(iT, cellData);
+                        catch ME
+                            
+                            keyboard
+                            %Handle errors
+                            fprintf('Error linking at frame %d\n', iT);
+                            
+                            saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
+                            if strcmpi(saveData,'y')
+                                tracks = LAPLinker.tracks;
+                                metadata = LAPLinker.metadata;
+                                save([saveFN, '.mat'], 'tracks', 'metadata');
+                            end
+                            rethrow(ME)
+                        end
+                        
+                        %Write movie file (if OutputMovie was set)
+                        if opts.OutputMovie
+                            
+                            if ~exist('vidObj','var') && numel(frameRange) > 1
+                                vidObj = VideoWriter([saveFN, '.avi']); %#ok<TNMLP>
+                                vidObj.FrameRate = 10;
+                                vidObj.Quality = 100;
+                                open(vidObj);
+                                
+                                if ~isempty(opts.SpotChannel)
+                                    spotVidObj = VideoWriter([saveFN, 'spots.avi']); %#ok<TNMLP>
+                                    spotVidObj.FrameRate = 10;
+                                    spotVidObj.Quality = 100;
+                                    open(spotVidObj);
+                                end
+                            end
+                            
+                            cellImgOut = CyTracker.makeAnnotatedImage(frame, imgToSegment(:, :, 1), cellLabels, Linker);
+                            
+                            if numel(frameRange) > 1
+                                vidObj.writeVideo(cellImgOut);
+                            else
+                                imwrite(cellImgOut,[saveFN, '.png']);
+                            end
+                            
+                            if ~isempty(opts.SpotChannel)
+                                spotImgOut = CyTracker.makeAnnotatedImage(frame, dotImg, dotLabels, Linker, 'notracks');
+                                spotImgOut = CyTracker.showoverlay(spotImgOut, bwperim(cellLabels), 'Color', [1 0 1]);
+                                
+                                if numel(frameRange) > 1
+                                    spotVidObj.writeVideo(spotImgOut);
+                                else
+                                    imwrite(spotImgOut,[saveFN, 'spots.png']);
+                                end
+                            end
+                            
+                        end
+                    end
+                    
+                end
+                
+                frameOffset = frameOffset + bfReader.sizeT;
+                
+            end
+            
+            %--- END tracking ---%
+            
+            %Save the track array
+            tracks = Linker.tracks;
+            metadata = Linker.metadata;
+            save([saveFN, '.mat'], 'tracks', 'metadata');
+            
+            %Close video objects
+            if exist('vidObj','var')
+                close(vidObj);
+                clear vidObj
+                
+                if ~isempty(opts.SpotChannel)
+                    close(spotVidObj);
+                    clear spotVidObj
+                end
+            end
+        end
+       
         function cellData = measure(cellLabels, spotLabels, bfReader, iT, pxShift)
             %MEASURE  Get cell data
             %
@@ -1539,7 +1813,7 @@ classdef CyTracker < handle
                     cellImage = double(cellImage);
                     
                     %Background-subtract images                    
-                    bgImage = imopen(cellImage, strel('disk', 15));
+                    bgImage = imopen(cellImage, strel('disk', 12));
                     cellImageTemp = cellImage - bgImage;
                     
                     cellImageTemp = imgaussfilt(cellImageTemp, 3);
@@ -1563,7 +1837,7 @@ classdef CyTracker < handle
                     mask = imopen(mask, strel('disk', 3));
                     mask = imclose(mask, strel('disk', 3));
                     
-                    mask = bwareaopen(mask, 300);
+                    mask = bwareaopen(mask, 600);
                     
 %                     showoverlay(cellImageTemp, bwperim(mask))
                     
@@ -2074,10 +2348,9 @@ classdef CyTracker < handle
             
         end
         
-        function imgOut = makeAnnotatedImage(iT, baseImage, cellMasks, trackData, varargin)
+        function imgOut = makeAnnotatedImage(iT, baseImage, cellMasks, Linker, varargin)
             %MAKEANNOTATEDIMAGE  Make annotated images
             
-            showTracks = true;
             if ~isempty(varargin)
                 if strcmpi(varargin{1}, 'notracks')
                     showTracks = false;
@@ -2096,22 +2369,21 @@ classdef CyTracker < handle
                 'BoxOpacity',0,'TextColor','white','AnchorPoint','RightTop');
             
             %Only plot active tracks
-            activeTracks = find(trackData.isTrackActive);            
+            activeTracks = Linker.activeTrackIDs;            
             for iTrack = activeTracks
                 
-                if isfield(trackData.tracks(iTrack), 'RegCentroid')
+                if isfield(Linker.tracks.Tracks(iTrack).Data, 'RegCentroid')
                     
-                    imgOut = insertText(imgOut, trackData.tracks(iTrack).RegCentroid{end}, iTrack,...
+                    imgOut = insertText(imgOut, Linker.tracks.Tracks(iTrack).Data.RegCentroid{end}, iTrack,...
                         'BoxOpacity', 0,'TextColor','yellow');
                     
                 else
-                                        
-                    imgOut = insertText(imgOut, trackData.tracks(iTrack).Centroid{end}, iTrack,...
+                           try             
+                    imgOut = insertText(imgOut, Linker.tracks.Tracks(iTrack).Data.Centroid{end}, iTrack,...
                         'BoxOpacity', 0,'TextColor','yellow');
-                    
-%                     if iT > trackData.tracks(iTrack).Frame(1)
-%                         imgOut = insertShape(imgOut, 'line', cell2mat(trackData.tracks(iTrack).Centroid), 'color','white');
-%                     end
+                           catch
+                               keyboard
+                           end
                     
                 end
                 
@@ -2206,232 +2478,7 @@ classdef CyTracker < handle
             
         end
         
-        function maskOut = bgStDevFilter(img, inputMask, thFactor)
-            %BGSTDEVFILTER eliminates all objects in mask that are below a
-            %given threshold value of standard deviation of pixel greyscale
-            %values.
-            %   FINDBGSTDEVTHLVL(img, inputMask) returns an output mask
-            %   containing only objects within the input mask that have a
-            %   standard deviation of pixel greyscale intensities higher
-            %   than thFactor. Standard deviations of pixel
-            %   greyscale values are calculated from the greyscale image,
-            %   img. This threshold value is obtained from
-            %   findBgStDevThLvl, and is used in 'nicksversion' of the
-            %   getCellLabels function for cell segmentation.
-            
-            %Initialize the output mask, starting with nothing filtered.
-            maskOut = inputMask;
-            
-            maskCC = bwconncomp(inputMask);
-            for iObj = 1:maskCC.NumObjects
-                
-                stdObj = std(img(maskCC.PixelIdxList{iObj}));
-                
-                if stdObj < thFactor
-                    maskOut(maskCC.PixelIdxList{iObj}) = 0;
-                end
-            end
-            
-        end
-        
-        function LL = nickSeg(cellImage, opts)
-            
-            %This version modified from 'experimental'
-            
-            %Pre-process the brightfield image: median filter and
-            %background subtraction
-            cellImage = double(cellImage);
-            
-            bgImage = imopen(cellImage, strel('disk', 40));
-            cellImageTemp = cellImage - bgImage;
-            cellImageTemp = imgaussfilt(cellImageTemp, 2);
-            
-            %Fit the background
-            [nCnts, xBins] = histcounts(cellImageTemp(:), 100);
-            nCnts = smooth(nCnts, 3);
-            xBins = diff(xBins) + xBins(1:end-1);
-            
-            %                   %Find the peak background
-            [bgPk, bgPkLoc] = max(nCnts);
-            
-            %Find point where counts drop to fraction of peak
-            thLoc = find(nCnts(bgPkLoc:end) <= bgPk * 0.25, 1, 'first');
-            thLoc = thLoc + bgPkLoc;
-            thLvl = xBins(thLoc);
-            
-            %Compute initial cell mask
-            mask = cellImageTemp > thLvl;
-            mask = imopen(mask, strel('disk', 3));
-            mask = imclose(mask, strel('disk', 3));
-            mask = imerode(mask, ones(1));
-            
-            %Separate the cell clumps using watershedding
-            dd = -bwdist(~mask);
-            dd(~mask) = -Inf;
-            dd = imhmin(dd, opts.maxCellminDepth);
-            LL = watershed(dd);
-            mask(LL == 0) = 0;
-            
-            %Tidy up
-            mask = imclearborder(mask);
-            mask = bwareaopen(mask, 100);
-            
-            %TESTING SOLIDITY
-            rpCells = regionprops(mask, {'Area','PixelIdxList','Solidity','MajorAxisLength','MinorAxisLength'});
-            
-            nonSolidCells = find([rpCells.Solidity] < 0.83 & [rpCells.Solidity] > 0.71 & ...
-                [rpCells.Area] > 1000 & [rpCells.Area] <= 3500 & ...
-                [rpCells.MinorAxisLength] > 35);
-            
-            for iCell = nonSolidCells
-                
-                currMask = false(size(mask));
-                currMask(rpCells(iCell).PixelIdxList) = true;
-                thLvl = prctile(cellImage(currMask), 10);
-                
-                newMask = cellImage > thLvl;
-                newMask(~currMask) = 0;
-                
-                newMask = imopen(newMask, strel('disk', 3));
-                newMask = imclose(newMask, strel('disk', 3));
-                newMask = imerode(newMask, ones(1));
-                
-                %Repeat the watershedding
-                dd = -bwdist(~newMask);
-                dd(~newMask) = -Inf;
-                dd = imhmin(dd, opts.maxCellminDepth + 3);
-                LL = watershed(dd);
-                newMask(LL == 0) = 0;
-                
-                newMask = bwareaopen(newMask, 100);
-                
-                %Replace the old masks
-                mask(currMask) = 0;
-                mask(currMask) = newMask(currMask);
-                
-            end
-            
-            mask = bwmorph(mask,'thicken', 8);
-            
-            %Filter out all objects with low StDev
-            mask = CyTracker.bgStDevFilter(cellImageTemp, mask, opts.thFactor);
-            
-            %Identify outlier cells and try to split them
-            rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-            
-            %Average area
-            medianArea = median([rpCells.Area]);
-            MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-            outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-            outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
-            outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-            outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-            outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-            outlierCells = unique(outlierCells);
-            
-            %                     currPrcTile = 30;
-            %                     while ~isempty(outlierCells)
-            %
-            %                         currPrcTile = currPrcTile + 5;
-            for iCell = outlierCells
-                
-                currMask = false(size(mask));
-                currMask(rpCells(iCell).PixelIdxList) = true;
-                thLvl = prctile(cellImage(currMask), 40);
-                
-                newMask = cellImage > thLvl;
-                newMask(~currMask) = 0;
-                
-                newMask = imopen(newMask, strel('disk', 3));
-                newMask = imclose(newMask, strel('disk', 3));
-                newMask = imerode(newMask, ones(1));
-                
-                dd = -bwdist(~newMask);
-                dd(~newMask) = -Inf;
-                dd = imhmin(dd, opts.maxCellminDepth);
-                LL = watershed(dd);
-                newMask(LL == 0) = 0;
-                
-                newMask = bwareaopen(newMask, 100);
-                newMask = bwmorph(newMask,'thicken', 8);
-                
-                %For all new cell objects, check stDev
-                newMask = CyTracker.bgStDevFilter(cellImageTemp, newMask, opts.thFactor);
-                
-                %Replace the old masks
-                mask(currMask) = 0;
-                mask(currMask) = newMask(currMask);
-                
-            end
-            
-            %                         %Then, re-calculate outlier cells. If any exist,
-            %                         %repeat local thresholding, but slightly more
-            %                         %stringent each time
-            %                         outlierCells = [];
-            %
-            %                         %Identify outlier cells and try to split them
-            %                         rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-            %
-            %                         %Average area
-            %                         medianArea = median([rpCells.Area]);
-            %                         MAD = 1.4826 * median(abs([rpCells.Area] - medianArea));
-            %                         outlierCells = find([rpCells.Area] > (medianArea + 3 * MAD));
-            %                         outlierCells = [outlierCells, find([rpCells.Area] > max(opts.cellAreaLim))];
-            %                         outlierCells = [outlierCells, find([rpCells.MinorAxisLength] > 45)];
-            %                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-            %                         outlierCells = [outlierCells, find([rpCells.MajorAxisLength] > 115)];
-            %                         outlierCells = unique(outlierCells);
-            %
-            %                     end
-            
-            %Do final check for escapee outliers
-            rpCells = regionprops(mask, {'Area','PixelIdxList','MajorAxisLength','MinorAxisLength'});
-            
-            escapees = find([rpCells.Area] > max(opts.cellAreaLim));
-            escapees = [escapees, find([rpCells.MinorAxisLength] > 45)];
-            escapees = [escapees, find([rpCells.MajorAxisLength]./[rpCells.MinorAxisLength] > 3.8)];
-            escapees = [escapees, find([rpCells.MajorAxisLength] > 115)];
-            escapees = unique(escapees);
-            
-            for iCell = escapees
-                %Everything is same as above except
-                %maxCellMinDepth changed to constant of 2
-                %(lowered).
-                currMask = false(size(mask));
-                currMask(rpCells(iCell).PixelIdxList) = true;
-                thLvl = prctile(cellImage(currMask), 40);
-                
-                newMask = cellImage > thLvl;
-                newMask(~currMask) = 0;
-                
-                newMask = imopen(newMask, strel('disk', 3));
-                newMask = imclose(newMask, strel('disk', 3));
-                newMask = imerode(newMask, ones(1));
-                
-                dd = -bwdist(~newMask);
-                dd(~newMask) = -Inf;
-                dd = imhmin(dd, opts.maxCellminDepth-3);
-                LL = watershed(dd);
-                newMask(LL == 0) = 0;
-                
-                newMask = bwareaopen(newMask, 100);
-                newMask = bwmorph(newMask,'thicken', 8);
-                
-                %Replace the old masks
-                mask(currMask) = 0;
-                mask(currMask) = newMask(currMask);
-                
-            end
-            
-            %Final elimination of small cells
-            mask = bwareaopen(mask, 100);
-            
-            %Redraw the masks using cylinders
-            rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
-            mask = CyTracker.drawCapsule(size(mask), rpCells);
-            
-        end
-        
+
     end
     
     methods (Access = private)

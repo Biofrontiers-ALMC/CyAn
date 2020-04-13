@@ -1,31 +1,19 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="2932180599" file="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack.prj" location="D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
-    <param.appname>CyTrack (v1.2.4)</param.appname>
+  <configuration file="D:\Projects\cyanobacteria-toolbox\code\build\CyAn - Cyanobacteria Image Analysis Toolbox.prj" location="D:\Projects\cyanobacteria-toolbox\code\build" name="CyAn - Cyanobacteria Image Analysis Toolbox" target="target.toolbox" target-name="Package Toolbox">
+    <param.appname>CyAn - Cyanobacteria Image Analysis Toolbox</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
-    <param.summary>Segmentation and Tracking code for Cyanobacteria</param.summary>
-    <param.description>Please see wiki for usage instructions: https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home</param.description>
+    <param.summary />
+    <param.description />
     <param.screenshot />
-    <param.version>1.2.4</param.version>
-    <param.output>${PROJECT_ROOT}\CyTrack (v1.2.4).mltbx</param.output>
-    <param.products.name>
-      <item>MATLAB</item>
-      <item>Computer Vision System Toolbox</item>
-      <item>Curve Fitting Toolbox</item>
-    </param.products.name>
-    <param.products.id>
-      <item>1</item>
-      <item>96</item>
-      <item>60</item>
-    </param.products.id>
-    <param.products.version>
-      <item>9.6</item>
-      <item>8.1</item>
-      <item>3.5.9</item>
-    </param.products.version>
+    <param.version>1.3.0</param.version>
+    <param.output>${PROJECT_ROOT}\CyAn - Cyanobacteria Image Analysis Toolbox.mltbx</param.output>
+    <param.products.name />
+    <param.products.id />
+    <param.products.version />
     <param.platforms />
-    <param.guid>11dead0a-728c-4a7b-b238-1680d6efddb0</param.guid>
+    <param.guid>adb09c01-b426-4bc2-8adb-fd44ae545319</param.guid>
     <param.exclude.filters />
     <param.exclude.pcodedmfiles>true</param.exclude.pcodedmfiles>
     <param.examples />
@@ -39,7 +27,7 @@
     <param.exported.on.package>false</param.exported.on.package>
     <param.required.addons>
       <requiredaddons>
-        <requiredAddOn downloadURL="" earliest="earliest" fromRepository="false" id="f27de8de-7bd2-4c9e-8c48-10d517608753" include="false" latest="latest">Bioformats Image Toolbox (v1.1.0)(2)</requiredAddOn>
+        <requiredAddOn downloadURL="" earliest="earliest" fromRepository="false" id="f27de8de-7bd2-4c9e-8c48-10d517608753" include="false" latest="latest">Bioformats Image Toolbox (v1.2.0)</requiredAddOn>
       </requiredaddons>
     </param.required.addons>
     <param.matlab.project.id />
@@ -61,8 +49,13 @@
       <param.authnamewatermark />
       <param.email />
       <param.company />
+      <param.summary />
+      <param.description />
       <param.screenshot />
       <param.output />
+      <param.products.name />
+      <param.products.id />
+      <param.products.version />
       <param.platforms />
       <param.exclude.filters />
       <param.exclude.pcodedmfiles />
@@ -92,22 +85,20 @@
       <param.additional.sw.linux.url />
     </unset>
     <fileset.rootdir>
-      <file>D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\tbx</file>
+      <file>D:\Projects\cyanobacteria-toolbox\code\tbx</file>
     </fileset.rootdir>
     <fileset.rootfiles>
-      <file>D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\tbx\cybox</file>
+      <file>D:\Projects\cyanobacteria-toolbox\code\tbx\cyto-cyanobacteria-toolbox</file>
     </fileset.rootfiles>
-    <fileset.depfun.included>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackData.m</file>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackDataArray.m</file>
-      <file>D:\Jian\Documents\Projects\coreCode\lap-cell-tracker\code\tbx\lap-tracker\TrackLinker.m</file>
-    </fileset.depfun.included>
+    <fileset.depfun.included />
     <fileset.depfun.excluded>
       <file>D:\Jian\Documents\MATLAB\imp-toolbox\showoverlay.m</file>
+      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
+      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="CyTrack (v1.2.4).mltbx" optional="false">D:\Jian\Documents\Projects\CameronLab\cyanobacteria-toolbox\code\build\CyTrack (v1.2.4).mltbx</file>
+      <file location="${PROJECT_ROOT}" name="CyAn - Cyanobacteria Image Analysis Toolbox.mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\code\build\CyAn - Cyanobacteria Image Analysis Toolbox.mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
