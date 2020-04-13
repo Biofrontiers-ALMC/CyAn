@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="2932180599" file="D:\Projects\cyanobacteria-toolbox\build\CyTrack.prj" location="D:\Projects\cyanobacteria-toolbox\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
+  <configuration build-checksum="2932180599" file="D:\Projects\cyanobacteria-toolbox\code\build\CyTrack.prj" location="D:\Projects\cyanobacteria-toolbox\code\build" name="CyTrack" target="target.toolbox" target-name="Package Toolbox">
     <param.appname>CyTrack (v1.3.0)</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
@@ -26,9 +26,7 @@
     <param.javaclasspath.excludes />
     <param.exported.on.package>false</param.exported.on.package>
     <param.required.addons>
-      <requiredaddons>
-        <requiredAddOn downloadURL="" earliest="earliest" fromRepository="false" id="f27de8de-7bd2-4c9e-8c48-10d517608753" include="false" latest="latest">Bioformats Image Toolbox (v1.1.0)</requiredAddOn>
-      </requiredaddons>
+      <requiredaddons />
     </param.required.addons>
     <param.matlab.project.id />
     <param.matlab.project.name />
@@ -83,27 +81,24 @@
       <param.additional.sw.linux.url />
     </unset>
     <fileset.rootdir>
-      <file>D:\Projects\cyanobacteria-toolbox\tbx</file>
+      <file>D:\Projects\cyanobacteria-toolbox\code\tbx</file>
     </fileset.rootdir>
     <fileset.rootfiles>
-      <file>D:\Projects\cyanobacteria-toolbox\tbx\cybox</file>
+      <file>D:\Projects\cyanobacteria-toolbox\code\tbx\cybox</file>
     </fileset.rootfiles>
     <fileset.depfun.included />
     <fileset.depfun.excluded>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfGetPlane.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\bfGetReader.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\bfmatlab\private\is_octave.m</file>
-      <file>C:\Users\Jian Tay\Documents\MATLAB\Add-Ons\Toolboxes\Bioformats Image Toolbox (v1.1.0)\BioformatsImage\BioformatsImage.m</file>
       <file>D:\Jian\Documents\MATLAB\imp-toolbox\showoverlay.m</file>
-      <file>D:\Projects\2019Aug Cameron CyAn\code\tbx\CyTracker.m</file>
-      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
-      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetPlane.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetReader.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\private\is_octave.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\BioformatsImage.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="CyTrack (v1.3.0).mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\build\CyTrack (v1.3.0).mltbx</file>
+      <file location="${PROJECT_ROOT}" name="CyTrack (v1.3.0).mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\code\build\CyTrack (v1.3.0).mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>

@@ -23,9 +23,9 @@ classdef CyTracker < handle
         UseMasks logical = false;
         InputMaskDir char = '';
                 
-        RegisterImages = false;
+        RegisterImages logical = false;
         ChannelToRegister = 'Cy5';
-        SaveMasks = false;
+        SaveMasks logical = false;
         
         ImageReader = 'bioformats';  %Or 'nd2sdk'
         
@@ -98,7 +98,9 @@ classdef CyTracker < handle
                 %If input is empty, prompt user to select file(s) and
                 %output directory
                 
-                [fname, fpath] = uigetfile({'*.nd2','ND2 file (*.nd2)'},...
+                [fname, fpath] = uigetfile({'*.nd2; *.tif; *.tiff', 'Image files (*.nd2; *.tif; *.tiff)'; ...
+                    '*.nd2','ND2 files (*.nd2)';...
+                    '*.tif; *.tiff', 'TIFF files (*.tif; *.tiff)'},...
                     'Select a file','multiSelect','on');
                 
                 if isequal(fname,0) || isequal(fpath,0)
@@ -803,9 +805,20 @@ classdef CyTracker < handle
                                 'ProcessingSettings', opts);
        
                             %Add timestamp information
-                            [ts, tsunit] = bfReader.getTimestamps(1,1);
-                            Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
-                                'TimestampUnits', tsunit);
+                            %Handle TIFF files
+                            [~, ~, fExt] = fileparts(filename);
+                            switch lower(fExt)
+                                
+                                case {'.tif', '.tiff'}
+                                    %Do not add timestamps
+                                    
+                                otherwise
+                                    [ts, tsunit] = bfReader.getTimestamps(1,1);
+                                    Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
+                                        'TimestampUnits', tsunit);
+                         
+                            end
+        
                         end
                         
                             
