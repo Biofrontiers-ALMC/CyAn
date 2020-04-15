@@ -4,13 +4,23 @@ classdef CyTracker < handle
     %  OBJ = CYTRACKER creates a new CyTracker object to process, segment,
     %  and track cyanobacteria cells in time-lapse movies. 
     %
-    %  This object requires the BioformatsImage toolbox and the LAP tracker
-    %  to be installed.
+    %  Example:
+    %  %Create a new CyTracker object
+    %  CT = CyTracker;
+    %
+    %  %Change properties to adjust settings
+    %  CT.ChannelToSegment = 'Red';
+    %  CT.SegMode = 'Brightfield';
+    %  CT.ThresholdLevel = 10;
+    %
+    %  %Call the method process(). A dialog box will pop up allowing you to
+    %  %select files you want to process, as well as prompting you to
+    %  %select the output directory
+    %  process(CT);
+    %
     %
     %  Please see the wiki for usage instructions: 
     %  https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home
-    %
-    %  Copyright 2018 - 2020 CU Boulder and the Cameron Lab
         
     properties
         
