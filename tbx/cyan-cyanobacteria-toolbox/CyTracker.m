@@ -345,7 +345,7 @@ classdef CyTracker < handle
             
             if isequal(fid,-1)
                 error('CyTracker:ErrorReadingFile',...
-                    'Could not open file %s for reading.',fname);
+                    'Could not open file %s for reading.',optionsFile);
             end
             
             ctrLine = 0;
@@ -667,14 +667,11 @@ classdef CyTracker < handle
             %  The OPTS struct can be constructed from a CYTRACKER object
             %  by using the (private) getOptions function.
             %
-            %  To handle multiple files, make filename into a cell:
-            %
             %  %Single file
-            %  trackFileMerge('file1.nd2', outputDir, opts)
-            %  trackFileMerge({'file1.nd2'}, outputDir, opts)
+            %  trackFile('file1.nd2', outputDir, opts)
             %  
             %  %Merge Multiple files
-            %  trackFileMerge({'file1.nd2', 'file2.nd2'}, outputDir, opts)
+            %  trackFile('file1.nd2', 'file2.nd2', outputDir, opts)
             
             %Convert single file into cell array if it's not already for
             %compatibility with the for loop
@@ -721,19 +718,48 @@ classdef CyTracker < handle
                 %files)
                 frameOffset = 0;
                 
-                for iF = 1:numel(filename)
+                %Initialize a new object for tracking
+                Linker = LAPLinker;
+                Linker.LinkedBy = opts.LinkedBy;
+                Linker.LinkCostMetric = opts.LinkCalculation;
+                Linker.LinkScoreRange = opts.LinkingScoreRange;
+                Linker.MaxTrackAge = opts.MaxTrackAge;
+                Linker.TrackDivision = opts.TrackDivision;
+                Linker.DivisionParameter = opts.DivisionParameter;
+                Linker.DivisionScoreMetric = opts.DivisionCalculation;
+                Linker.DivisionScoreRange = opts.DivisionScoreRange;
+                Linker.MinFramesBetweenDiv = opts.MinAgeSinceDivision;
+                
+                %Create a vector to hold timestamp information
+                timestamps = [];
+                
+                for iFile = 1:numel(filename)
                     
-                    [~, currfilename] = fileparts(filename{iF});
+                    [~, currfilename] = fileparts(filename{iFile});
                     
                     %Get a reader object for the image
                     if strcmpi(opts.ImageReader, 'nd2sdk')
-                        reader = ND2reader(filename{iF});
+                        reader = ND2reader(filename{iFile});
                     else
-                        reader = BioformatsImage(filename{iF});
+                        reader = BioformatsImage(filename{iFile});
                     end
                     
                     %Change series
                     reader.series = iSeries;
+                    
+                    if iFile == 1
+                        %Update common file metadata
+                        Linker = updateMetadata(Linker, 'Filename', reader.filename, ...
+                            'PhysicalPxSize', reader.pxSize, ...
+                            'PhysicalPxSizeUnits', reader.pxUnits, ...
+                            'ImageSize', [reader.height, reader.width], ...
+                            'ProcessingSettings', opts, ...
+                            'IsMerged', numel(filename) > 1);  %Is true if files were merged
+                    end
+                    
+                    %Add timestamp information
+                    [ts, tsunit] = reader.getTimestamps(1,1);
+                    timestamps = [timestamps, ts];  %#ok<AGROW>
                     
                     %Set the frame range to process
                     if isinf(opts.FrameRange)
@@ -743,7 +769,7 @@ classdef CyTracker < handle
                     end
                     
                     %Print progress statement
-                    fprintf('%s %s (series %.0f): Started processing.\n', datestr(now), filename{iF}, iSeries);
+                    fprintf('%s %s (series %.0f): Started processing.\n', datestr(now), filename{iFile}, iSeries);
                     
                     %--- Start tracking ---%
                     for frame = frameRange
@@ -837,35 +863,9 @@ classdef CyTracker < handle
                         %Add detected objects to tracks
                         if numel(cellData) == 0
                             %Skip if no cells were found
-                            warning('CyTracker:NoCellsFound', '%s (frame %d): Cell mask was empty.',filename{iF}, frame);
+                            warning('CyTracker:NoCellsFound', '%s (frame %d): Cell mask was empty.',filename{iFile}, frame);
                         else
-                            if ~exist('Linker', 'var')
-                                
-                                %Initialize a new object for tracking
-                                Linker = LAPLinker;
-                                Linker.LinkedBy = opts.LinkedBy;
-                                Linker.LinkCostMetric = opts.LinkCalculation;
-                                Linker.LinkScoreRange = opts.LinkingScoreRange;
-                                Linker.MaxTrackAge = opts.MaxTrackAge;
-                                Linker.TrackDivision = opts.TrackDivision;
-                                Linker.DivisionParameter = opts.DivisionParameter;
-                                Linker.DivisionScoreMetric = opts.DivisionCalculation;
-                                Linker.DivisionScoreRange = opts.DivisionScoreRange;
-                                Linker.MinFramesBetweenDiv = opts.MinAgeSinceDivision;
-                                
-                                %Write file metadata
-                                Linker = updateMetadata(Linker, 'Filename', reader.filename, ...
-                                    'PhysicalPxSize', reader.pxSize, ...
-                                    'PhysicalPxSizeUnits', reader.pxUnits, ...
-                                    'ImageSize', [reader.height, reader.width], ...
-                                    'ProcessingSettings', opts);
-                                
-                                %Add timestamp information
-                                [ts, tsunit] = reader.getTimestamps(1,1);
-                                Linker = updateMetadata(Linker, 'Timestamps', ts(frameRange), ...
-                                    'TimestampUnits', tsunit);
-                                
-                            end
+               
                             
                             try
                                 %Adjust frame offset (for merging files)
@@ -881,8 +881,7 @@ classdef CyTracker < handle
                                 saveData = input('There was an error linking tracks. Would you like to save the tracked data generated so far (y = yes)?\n','s');
                                 if strcmpi(saveData,'y')
                                     tracks = LAPLinker.tracks;
-                                    metadata = LAPLinker.metadata;
-                                    save([saveFN, '.mat'], 'tracks', 'metadata');
+                                    save([saveFN, '.mat'], 'tracks');
                                 end
                                 rethrow(ME)
                             end
@@ -933,11 +932,14 @@ classdef CyTracker < handle
                 end
                 
                 %--- END tracking ---%
-                
+                %Update timestamp information
+                Linker = updateMetadata(Linker, ...
+                    'Timestamps', timestamps, ...
+                    'TimestampUnits', tsunit);
+                    
                 %Save the track array
                 tracks = Linker.tracks;
-                metadata = Linker.metadata;
-                save([saveFN, '.mat'], 'tracks', 'metadata');
+                save([saveFN, '.mat'], 'tracks');
                 
                 %Close video objects
                 if exist('vidObj','var')
@@ -951,7 +953,7 @@ classdef CyTracker < handle
                 end
                 
                 %Print progress statement
-                fprintf('%s %s (series %.0f): Completed.\n', datestr(now), filename{iF}, iSeries);
+                fprintf('%s %s (series %.0f): Completed.\n', datestr(now), filename{iFile}, iSeries);
             end
             
         end
