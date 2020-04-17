@@ -66,6 +66,13 @@ classdef DataAnalyzer < TrackArray
                 obj.PxUnits = obj.FileMetadata.PhysicalPxSizeUnits;
             end
             
+            obj = analyze(obj);
+            
+        end
+        
+        function obj = analyze(obj)
+            %ANALYZE  Run analysis on tracks
+            
             for ii = 1:numel(obj.Tracks)
                 
                 %--- Calculate Growth Rate ---%
@@ -96,7 +103,6 @@ classdef DataAnalyzer < TrackArray
                     obj.Tracks(ii).Generation = obj.Tracks(motherIndex).Generation + 1;
                     
                 end
-                
                 
             end
             
