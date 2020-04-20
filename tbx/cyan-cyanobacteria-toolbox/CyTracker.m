@@ -861,7 +861,8 @@ classdef CyTracker < handle
                         end
                         
                         %Run the measurement function
-                        cellData = CyTracker.measure(cellLabels, dotLabels, reader, frame, pxShift);
+                        isFilamentous = opts.IsFilamentous;
+                        cellData = CyTracker.measure(cellLabels, dotLabels, reader, frame, pxShift, isFilamentous);
                         
                         %Add detected objects to tracks
                         if numel(cellData) == 0
@@ -915,8 +916,6 @@ classdef CyTracker < handle
                                 end
                             end
                         end
-                    else 
-                        dotLabels = [];
                     end
                                         
                     %Compute the pixel shift to register image
