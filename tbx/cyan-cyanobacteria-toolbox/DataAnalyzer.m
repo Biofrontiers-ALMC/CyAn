@@ -2,7 +2,9 @@ classdef DataAnalyzer < TrackArray
     %DATAANALYZER  Data analysis for cyanobacteria cells
     %
     %  OBJ = DATAANALYZER creates an empty DataAnalyzer object. Use the
-    %  method importdata to load TrackArray data into the object.   
+    %  method importdata to load TrackArray data into the object. 
+    
+    
     
     properties
         
@@ -158,8 +160,6 @@ classdef DataAnalyzer < TrackArray
                 end
             end
         end
-        
-        
         
     end
     
