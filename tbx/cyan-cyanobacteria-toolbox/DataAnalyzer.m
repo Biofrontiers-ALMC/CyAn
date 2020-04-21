@@ -2,9 +2,7 @@ classdef DataAnalyzer < TrackArray
     %DATAANALYZER  Data analysis for cyanobacteria cells
     %
     %  OBJ = DATAANALYZER creates an empty DataAnalyzer object. Use the
-    %  method importdata to load TrackArray data into the object. 
-    
-    
+    %  method importdata to load TrackArray data into the object.   
     
     properties
         
@@ -45,7 +43,7 @@ classdef DataAnalyzer < TrackArray
             
             if numel(data) == 1 && isa(tmp.(data{1}), 'TrackArray')
                 
-                obj = importobj(obj,tmp.(data{1}));
+                obj = DataAnalyzer.copyObject(tmp.(data{1}), obj);
 
             else
                 error('Expected data to be a TrackArray. Other formats not currently supported.')
@@ -149,10 +147,11 @@ classdef DataAnalyzer < TrackArray
             end
         end
         
+        
+        
     end
     
 end
-
 
 
 
