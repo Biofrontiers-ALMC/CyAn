@@ -41,39 +41,26 @@ classdef DataAnalyzer < TrackArray
                 tmp = load(filename);
             end
 
-            %Look for a TrackArray object and load it
-            loadedVars = fieldnames(tmp);
-            trackarrayFound = false;
+            data = fieldnames(tmp);
             
-            for iData = 1:numel(loadedVars)
-                if isa(tmp.(loadedVars{iData}), 'TrackArray')
-                    obj = DataAnalyzer.copyObject(tmp.(loadedVars{1}), obj);
-                    trackarrayFound = true;                    
-                    break;
-                end
-            end
-            
-            if ~trackarrayFound
-                error('DataAnalyzer:importdata:TrackArrayNotFound', ...
-                    'Did not find a TrackArray object.')
+            if numel(data) == 1 && isa(tmp.(data{1}), 'TrackArray')
+                
+                obj = importobj(obj,tmp.(data{1}));
+
+            else
+                error('Expected data to be a TrackArray. Other formats not currently supported.')
+
             end
             
             %Set the mean delta T
             if ~isempty(obj.FileMetadata.Timestamps)
-                obj.MeanDeltaT = mean(diff(obj.FileMetadata.Timestamps));
+                obj.MeanDeltaT = mean(obj.FileMetadata.Timestamps);
             end
            
             if ~isempty(obj.FileMetadata.PhysicalPxSize)
                 obj.PxSize = obj.FileMetadata.PhysicalPxSize;
                 obj.PxUnits = obj.FileMetadata.PhysicalPxSizeUnits;
             end
-            
-            obj = analyze(obj);
-            
-        end
-        
-        function obj = analyze(obj)
-            %ANALYZE  Run analysis on tracks
             
             for ii = 1:numel(obj.Tracks)
                 
@@ -105,6 +92,7 @@ classdef DataAnalyzer < TrackArray
                     obj.Tracks(ii).Generation = obj.Tracks(motherIndex).Generation + 1;
                     
                 end
+                
                 
             end
             
