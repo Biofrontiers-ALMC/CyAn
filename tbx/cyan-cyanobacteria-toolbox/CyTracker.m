@@ -652,7 +652,6 @@ classdef CyTracker < handle
             
         end
 
-        
     end
     
     methods (Static)
@@ -763,7 +762,7 @@ classdef CyTracker < handle
                     
                     %Get timestamp information
                     [ts, tsunit] = reader.getTimestamps(1,1);
-                    timestamps = [timestamps, ts];  %#ok<AGROW>
+                    timestamps = [timestamps, ts(opts.FrameRange)];  %#ok<AGROW>
                     
                     %Set the frame range to process
                     if isinf(opts.FrameRange)
