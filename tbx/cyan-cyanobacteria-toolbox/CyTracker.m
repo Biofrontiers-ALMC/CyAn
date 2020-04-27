@@ -594,17 +594,13 @@ classdef CyTracker < handle
                             %necessary - as output, we want a B&W image
                             %with an overlay of the mask.
                             if size(imgToSegment, 3) > 1
-                                
-                            else
-                                
+                                imgToSegment = max(imgToSegment, 3);                                                            
                             end
                             
                             %Write to TIFF stack
                             maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_cellMask.tif', currFN, iSeries));
                             imageOutputFN = fullfile(outputDir, sprintf('%s_series%d_cy5.tif', currFN, iSeries));
-                            
-                            outputMask = cat(3, false(size(outputMask)), outputMask, false(size(outputMask)));
-                            
+                                                      
                             if iT == frameRange(1)
                                 imwrite(outputMask, maskOutputFN, 'compression', 'none');
                                 imwrite(imgToSegment, imageOutputFN, 'compression', 'none');
