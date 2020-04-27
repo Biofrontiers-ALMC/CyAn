@@ -541,36 +541,35 @@ classdef CyTracker < handle
                 fprintf('%s: Exporting masks of file %s\n', ...
                     datestr(now), filename{iFile});
                 
-                
                 [~, currFN] = fileparts(filename{iFile});
                 
                 if strcmpi(obj.ImageReader, 'nd2sdk')
-                    bfr = ND2reader(filename{iFile});
+                    reader = ND2reader(filename{iFile});
                 else
-                    bfr = BioformatsImage(filename{iFile});
-                end
-                
-                if obj.SwapZandT
-                    bfr.swapZandT = true;                    
+                    reader = BioformatsImage(filename{iFile});
+                    
+                    if obj.SwapZandT
+                        reader.swapZandT = true;
+                    end
                 end
                 
                 %Get frame range
                 if isinf(obj.FrameRange)
-                    frameRange = 1:bfr.sizeT;
+                    frameRange = 1:reader.sizeT;
                 else
                     frameRange = obj.FrameRange;
                 end
                 
                 %Get series range
                 if isinf(obj.SeriesRange)
-                    seriesRange = 1:bfr.seriesCount;
+                    seriesRange = 1:reader.seriesCount;
                 else
                     seriesRange = obj.SeriesRange;
                 end
                 
                 for iSeries = seriesRange
                     
-                    bfr.series = iSeries;
+                    reader.series = iSeries;
                     
                     %For 'nicksversion' of segmentation, if using auto
                     %threshold finding
@@ -582,58 +581,44 @@ classdef CyTracker < handle
                     
                     for iT = frameRange
                         
-                        %Read in the image
-                        if ~iscell(opts.ChannelToSegment)
-                            opts.ChannelToSegment = {opts.ChannelToSegment};
-                        end
-                        
-                        imgToSegment = zeros(bfr.height, bfr.width, numel(opts.ChannelToSegment), 'uint16');
-                        for iC = 1:numel(opts.ChannelToSegment)
-                            imgToSegment(:, :, iC) = (bfr.getPlane(1, opts.ChannelToSegment{iC}, iT));
-                        end
-                        
-                        
+                        imgToSegment = CyTracker.getImageToSegment(reader, obj.ChannelToSegment, iT);
+
                         %Segment the cells
-                        currCellMask = CyTracker.getCellLabels(...
+                        outputMask = CyTracker.getCellLabels(...
                             imgToSegment, ...
                             obj.ThresholdLevel, obj.SegMode, ...
                             obj.MaxCellMinDepth, obj.CellAreaLim, exportRaw);
                         
-                        %Normalize the mask
-                        outputMask = currCellMask > 0;
-                        outputMask(boundarymask(currCellMask)) = 0;
-                        %outputMask = uint8(outputMask) .* 255;
-                        
-                        if exportRaw
-                            outputMask = bwmorph(outputMask,'skel', Inf);
-                            
-                        end
-                        
                         if ismember(exportType, {'cellonly', 'all'})
-                            
-                            %Normalize the image and convert to uint8
-                            imgToExport = bfr.getPlane(1, 'Cy5', iT);
-                            outputImg = uint8(double(imgToExport)./double(max(imgToExport(:))) .* 255);
+                            %Reduce dimension of image to segment if
+                            %necessary - as output, we want a B&W image
+                            %with an overlay of the mask.
+                            if size(imgToSegment, 3) > 1
+                                
+                            else
+                                
+                            end
                             
                             %Write to TIFF stack
                             maskOutputFN = fullfile(outputDir, sprintf('%s_series%d_cellMask.tif', currFN, iSeries));
                             imageOutputFN = fullfile(outputDir, sprintf('%s_series%d_cy5.tif', currFN, iSeries));
                             
+                            outputMask = cat(3, false(size(outputMask)), outputMask, false(size(outputMask)));
+                            
                             if iT == frameRange(1)
                                 imwrite(outputMask, maskOutputFN, 'compression', 'none');
-                                imwrite(outputImg, imageOutputFN, 'compression', 'none');
+                                imwrite(imgToSegment, imageOutputFN, 'compression', 'none');
                             else
                                 imwrite(outputMask, maskOutputFN, 'writeMode', 'append', 'compression', 'none');
-                                imwrite(outputImg, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
+                                imwrite(imgToSegment, imageOutputFN, 'writeMode', 'append', 'compression', 'none');
                             end
-                            
                         end
                         
                         if ismember(exportType, {'spotonly', 'all'}) && ~isempty(obj.SpotChannel)
      
                             spotOutputFN = fullfile(outputDir, sprintf('%s_series%d_spotMask.tif', currFN, iSeries));
                             
-                            spotImg = bfr.getPlane(1, obj.SpotChannel, iT);
+                            spotImg = reader.getPlane(1, obj.SpotChannel, iT);
                             
                             spotMask = CyTracker.segmentSpots(spotImg, ...
                                 currCellMask, opts);
@@ -651,7 +636,7 @@ classdef CyTracker < handle
             end
             
         end
-
+        
     end
     
     methods (Static)
@@ -751,7 +736,6 @@ classdef CyTracker < handle
                     reader.series = iSeries;
                     
                     if iFile == 1
-                    
                         %Update common file metadata
                         Linker = updateMetadata(Linker, 'Filename', reader.filename, ...
                             'PhysicalPxSize', reader.pxSize, ...
@@ -760,10 +744,6 @@ classdef CyTracker < handle
                             'ProcessingSettings', opts);
                     end
                     
-                    %Get timestamp information
-                    [ts, tsunit] = reader.getTimestamps(1,1);
-                    timestamps = [timestamps, ts(opts.FrameRange)];  %#ok<AGROW>
-                    
                     %Set the frame range to process
                     if isinf(opts.FrameRange)
                         frameRange = 1:reader.sizeT;
@@ -771,21 +751,17 @@ classdef CyTracker < handle
                         frameRange = opts.FrameRange;
                     end
                     
+                    %Get timestamp information
+                    [ts, tsunit] = reader.getTimestamps(1,1);
+                    timestamps = [timestamps, ts(frameRange)];  %#ok<AGROW>
+                    
                     %Print progress statement
                     fprintf('%s %s (series %.0f): Started processing.\n', datestr(now), filename{iFile}, iSeries);
                     
                     %--- Start tracking ---%
                     for frame = frameRange
                         
-                        %Read in the channels to segment
-                        if ~iscell(opts.ChannelToSegment)
-                            opts.ChannelToSegment = {opts.ChannelToSegment};
-                        end
-
-                        imgToSegment = zeros(reader.height, reader.width, numel(opts.ChannelToSegment), 'uint16');
-                        for iC = 1:numel(opts.ChannelToSegment)
-                            imgToSegment(:, :, iC) = (reader.getPlane(1, opts.ChannelToSegment{iC}, frame));
-                        end
+                        imgToSegment = CyTracker.getImageToSegment(reader, opts.ChannelToSegment, frame);
                         
                         if ~opts.UseMasks
                             %Segment the cells
@@ -806,8 +782,9 @@ classdef CyTracker < handle
                         else
                             %Load the masks
                             mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_cellMask.tif',currfilename, iSeries)),'Index', frame);
+                            mask = rgb2gray(mask);
                             mask = mask > 0;
-                            cellLabels = labelmatrix(bwconncomp(mask(:,:,1)));
+                            cellLabels = labelmatrix(bwconncomp(mask));
                         end
                         
                         %Run spot detection if the SpotChannel property is set
@@ -1455,6 +1432,8 @@ classdef CyTracker < handle
                     LL = eval([segMode, '(cellImage, opts)']);
             end
                         
+            LL(boundarymask(LL)) = 0;
+            
             if ~any(LL(:))
                 warning('No cells detected');              
             end
@@ -2055,6 +2034,29 @@ classdef CyTracker < handle
             for iP = 1:numel(propList)
                 sOut.(propList{iP}) = obj.(propList{iP});
             end
+        end
+        
+    end
+    
+    methods (Access = private, Static)
+        function imgToSegment = getImageToSegment(reader, channels, frame)
+            %GETIMAGETOSEGMENT  Get image to segment
+            %
+            %  I = GETIMAGETOSEGMENT(channels) returns the image to segment
+            %  in the matrix I. Multiple channels can be specified using a
+            %  cell array of channel names.
+            
+            %Read in the channels to segment
+            if ~iscell(channels)
+                channels = {channels};
+            end
+            
+            imgToSegment = zeros(reader.height, reader.width, numel(channels), 'uint16');
+            for iC = 1:numel(channels)
+                imgToSegment(:, :, iC) = (reader.getPlane(1, channels{iC}, frame));
+            end
+            
+            
         end
         
     end
