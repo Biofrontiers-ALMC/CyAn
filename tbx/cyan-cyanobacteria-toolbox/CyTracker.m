@@ -733,7 +733,7 @@ classdef CyTracker < handle
                     
                     if iFile == 1
                         %Update common file metadata
-                        Linker = updateMetadata(Linker, 'Filename', reader.filename, ...
+                        Linker = updateMetadata(Linker, 'Filename', strjoin(filename, '; '), ...
                             'PhysicalPxSize', reader.pxSize, ...
                             'PhysicalPxSizeUnits', reader.pxUnits, ...
                             'ImageSize', [reader.height, reader.width], ...
@@ -778,7 +778,9 @@ classdef CyTracker < handle
                         else
                             %Load the masks
                             mask = imread(fullfile(opts.InputMaskDir, sprintf('%s_series%d_cellMask.tif',currfilename, iSeries)),'Index', frame);
-                            mask = rgb2gray(mask);
+                            if size(mask, 3) > 1
+                                mask = rgb2gray(mask);
+                            end
                             mask = mask > 0;
                             cellLabels = labelmatrix(bwconncomp(mask));
                         end
