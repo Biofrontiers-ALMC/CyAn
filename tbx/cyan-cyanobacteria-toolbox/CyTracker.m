@@ -726,6 +726,7 @@ classdef CyTracker < handle
                         reader = ND2reader(filename{iFile});
                     else
                         reader = BioformatsImage(filename{iFile});
+                        reader.swapZandT = opts.SwapZandT;
                     end
                     
                     %Change series
