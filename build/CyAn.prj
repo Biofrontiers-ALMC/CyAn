@@ -1,14 +1,14 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
   <configuration file="D:\Projects\cyanobacteria-toolbox\code\build\CyAn - Cyanobacteria Image Analysis Toolbox.prj" location="D:\Projects\cyanobacteria-toolbox\code\build" name="CyAn - Cyanobacteria Image Analysis Toolbox" target="target.toolbox" target-name="Package Toolbox">
-    <param.appname>CyAn - Cyanobacteria Image Analysis Toolbox</param.appname>
+    <param.appname>CyAn</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
-    <param.summary />
+    <param.summary>Cyanobacteria Image Analysis Toolbox</param.summary>
     <param.description />
     <param.screenshot />
-    <param.version>1.3.0</param.version>
-    <param.output>${PROJECT_ROOT}\CyAn - Cyanobacteria Image Analysis Toolbox.mltbx</param.output>
+    <param.version>1.3.1</param.version>
+    <param.output>${PROJECT_ROOT}\CyAn.mltbx</param.output>
     <param.products.name />
     <param.products.id />
     <param.products.version />
@@ -22,13 +22,15 @@
     <param.registered.apps />
     <param.docs />
     <param.getting.started.guide />
-    <param.matlabpath.excludes />
+    <param.matlabpath.excludes>
+      <item>/D__/Projects/Bioformats Image Toolbox/code/tbx/BioformatsImage</item>
+      <item>/D__/Projects/Bioformats Image Toolbox/code/tbx/BioformatsImage/bfmatlab</item>
+      <item>/D__/Projects/Common/imp-toolbox</item>
+    </param.matlabpath.excludes>
     <param.javaclasspath.excludes />
     <param.exported.on.package>false</param.exported.on.package>
     <param.required.addons>
-      <requiredaddons>
-        <requiredAddOn downloadURL="" earliest="earliest" fromRepository="false" id="f27de8de-7bd2-4c9e-8c48-10d517608753" include="false" latest="latest">Bioformats Image Toolbox (v1.2.0)</requiredAddOn>
-      </requiredaddons>
+      <requiredaddons />
     </param.required.addons>
     <param.matlab.project.id />
     <param.matlab.project.name />
@@ -49,7 +51,6 @@
       <param.authnamewatermark />
       <param.email />
       <param.company />
-      <param.summary />
       <param.description />
       <param.screenshot />
       <param.output />
@@ -65,7 +66,6 @@
       <param.registered.apps />
       <param.docs />
       <param.getting.started.guide />
-      <param.matlabpath.excludes />
       <param.javaclasspath.excludes />
       <param.exported.on.package />
       <param.matlab.project.id />
@@ -88,17 +88,24 @@
       <file>D:\Projects\cyanobacteria-toolbox\code\tbx</file>
     </fileset.rootdir>
     <fileset.rootfiles>
-      <file>D:\Projects\cyanobacteria-toolbox\code\tbx\cyto-cyanobacteria-toolbox</file>
+      <file>D:\Projects\cyanobacteria-toolbox\code\tbx\cyan-cyanobacteria-toolbox</file>
     </fileset.rootfiles>
-    <fileset.depfun.included />
+    <fileset.depfun.included>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetPlane.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetReader.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\private\is_octave.m</file>
+      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\BioformatsImage.m</file>
+      <file>D:\Projects\Common\imp-toolbox\showoverlay.m</file>
+    </fileset.depfun.included>
     <fileset.depfun.excluded>
-      <file>D:\Jian\Documents\MATLAB\imp-toolbox\showoverlay.m</file>
       <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
       <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="CyAn - Cyanobacteria Image Analysis Toolbox.mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\code\build\CyAn - Cyanobacteria Image Analysis Toolbox.mltbx</file>
+      <file location="${PROJECT_ROOT}" name="CyAn.mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\code\build\CyAn.mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
