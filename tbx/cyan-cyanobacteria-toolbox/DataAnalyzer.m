@@ -109,6 +109,56 @@ classdef DataAnalyzer < TrackArray
             
         end
         
+        function plotLineage(obj, rootTrackID, varargin)
+            %PLOTLINEAGE  Plot data from a lineage
+            %
+            %  OBJ = PLOTLINEAGE(OBJ, ROOT) plots the MajorAxisLength of
+            %  the track ROOT and all its descendents.
+            %
+            %  OBj = PLOTLINEAGE(OBJ, ROOT, PROPERTY) plots the property
+            %  specified. The property should be a time-series data
+            %  fieldname.
+            %
+            %  Additional arguments can be passed as parameter-value pairs
+            %  OBJ = PLOTLINEAGE(OBJ, ..., PARAM, VALUE).
+            
+            if ~isnumeric(rootTrackID) && ~(numel(rootTrackID) == 1)
+                error('DataAnalyzer:plotLineage:InvalidRootID', ...
+                    'Root ID is invalid. Expected a single number.');
+            end
+            
+            if ~isempty(varargin)
+                propertyToPlot = varargin{1};
+            else
+                propertyToPlot = 'MajorAxisLength';                
+            end
+            
+            %Get the list of track IDs in level order
+            idList = traverse(obj, rootTrackID, 'level');
+            isLeft = true;
+            
+            hold on
+            for iTrack = 1:numel(idList)
+                
+                tt = obj.Tracks(idList(iTrack)).Frames;
+                data = [obj.Tracks(idList(iTrack)).Data.(propertyToPlot){:}];
+                
+                if isLeft
+                    plot(tt, data)
+                    if iTrack > 1
+                        isLeft = false;
+                    end
+                else
+                    plot(tt, data, '--')
+                    isLeft = true;
+                end
+                
+            end
+            hold off
+            ylabel(propertyToPlot)
+            xlabel('Frames')            
+        end
+        
     end
     
     methods (Static)
@@ -159,8 +209,7 @@ classdef DataAnalyzer < TrackArray
                 end
             end
         end
-        
-        
+               
         
     end
     
