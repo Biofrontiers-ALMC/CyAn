@@ -12,8 +12,17 @@ classdef DataAnalyzer < TrackArray
         
     end
     
+    properties (Dependent)
+        numColonies        
+    end
+    
     methods
-                 
+        
+        function numColonies = get.numColonies(obj)
+            %Return number of colonies
+            numColonies = max([obj.Tracks.Colony]);            
+        end
+        
         function obj = importdata(obj, filename)
             %IMPORTDATA  Import data into the analyzer object
             %
@@ -73,6 +82,7 @@ classdef DataAnalyzer < TrackArray
         function obj = analyze(obj)
             %ANALYZE  Run analysis on tracks
             
+            colonyCount = 0;
             for ii = 1:numel(obj.Tracks)
                 
                 %--- Calculate Growth Rate ---%
@@ -93,20 +103,73 @@ classdef DataAnalyzer < TrackArray
                 
                 %--- Calculate generation number ---%
                 if isnan(obj.Tracks(ii).MotherID)
-                    
                     obj.Tracks(ii).Generation = 1;
-                    
                 else
-                    
                     motherIndex = findtrack(obj, obj.Tracks(ii).MotherID);
-                    
                     obj.Tracks(ii).Generation = obj.Tracks(motherIndex).Generation + 1;
-                    
                 end
                 
+                %--- Colony ID ---%
+                if isnan(obj.Tracks(ii).MotherID)
+                    colonyCount = colonyCount + 1;
+                    obj.Tracks(ii).Colony = colonyCount;
+                else
+                    motherIndex = findtrack(obj, obj.Tracks(ii).MotherID);
+                    obj.Tracks(ii).Colony = obj.Tracks(motherIndex).Colony;
+                end
                 
             end
             
+        end
+        
+        function plotLineage(obj, rootTrackID, varargin)
+            %PLOTLINEAGE  Plot data from a lineage
+            %
+            %  OBJ = PLOTLINEAGE(OBJ, ROOT) plots the MajorAxisLength of
+            %  the track ROOT and all its descendents.
+            %
+            %  OBj = PLOTLINEAGE(OBJ, ROOT, PROPERTY) plots the property
+            %  specified. The property should be a time-series data
+            %  fieldname.
+            %
+            %  Additional arguments can be passed as parameter-value pairs
+            %  OBJ = PLOTLINEAGE(OBJ, ..., PARAM, VALUE).
+            
+            if ~isnumeric(rootTrackID) && ~(numel(rootTrackID) == 1)
+                error('DataAnalyzer:plotLineage:InvalidRootID', ...
+                    'Root ID is invalid. Expected a single number.');
+            end
+            
+            if ~isempty(varargin)
+                propertyToPlot = varargin{1};
+            else
+                propertyToPlot = 'MajorAxisLength';                
+            end
+            
+            %Get the list of track IDs in level order
+            idList = traverse(obj, rootTrackID, 'level');
+            isLeft = true;
+            
+            hold on
+            for iTrack = 1:numel(idList)
+                
+                tt = obj.Tracks(idList(iTrack)).Frames;
+                data = [obj.Tracks(idList(iTrack)).Data.(propertyToPlot){:}];
+                
+                if isLeft
+                    plot(tt, data)
+                    if iTrack > 1
+                        isLeft = false;
+                    end
+                else
+                    plot(tt, data, '--')
+                    isLeft = true;
+                end
+                
+            end
+            hold off
+            ylabel(propertyToPlot)
+            xlabel('Frames')            
         end
         
     end
@@ -159,9 +222,7 @@ classdef DataAnalyzer < TrackArray
                 end
             end
         end
-        
-        
-        
+               
     end
     
 end
