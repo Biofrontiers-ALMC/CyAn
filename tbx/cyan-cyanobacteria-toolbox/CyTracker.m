@@ -687,6 +687,18 @@ classdef CyTracker < handle
                 opts.FrameRange = Inf;
             end
             
+            %Get a reader object for each file
+            reader = cell(1, numel(filename));
+            for iFile = 1:numel(filename)
+                %Get a reader object for the image
+                if strcmpi(opts.ImageReader, 'nd2sdk')
+                    reader{iFile} = ND2reader(filename{iFile});
+                else
+                    reader{iFile} = BioformatsImage(filename{iFile});
+                    reader{iFile}.swapZandT = opts.SwapZandT;
+                end
+            end
+            
             %Start processing
             for iSeries = opts.SeriesRange
                 
@@ -721,35 +733,35 @@ classdef CyTracker < handle
                     
                     [~, currfilename] = fileparts(filename{iFile});
                     
-                    %Get a reader object for the image
-                    if strcmpi(opts.ImageReader, 'nd2sdk')
-                        reader = ND2reader(filename{iFile});
-                    else
-                        reader = BioformatsImage(filename{iFile});
-                        reader.swapZandT = opts.SwapZandT;
-                    end
+%                     %Get a reader object for the image
+%                     if strcmpi(opts.ImageReader, 'nd2sdk')
+%                         reader = ND2reader(filename{iFile});
+%                     else
+%                         reader = BioformatsImage(filename{iFile});
+%                         reader.swapZandT = opts.SwapZandT;
+%                     end
                     
                     %Change series
-                    reader.series = iSeries;
+                    reader{iFile}.series = iSeries;
                     
                     if iFile == 1
                         %Update common file metadata
                         Linker = updateMetadata(Linker, 'Filename', strjoin(filename, '; '), ...
-                            'PhysicalPxSize', reader.pxSize, ...
-                            'PhysicalPxSizeUnits', reader.pxUnits, ...
-                            'ImageSize', [reader.height, reader.width], ...
+                            'PhysicalPxSize', reader{iFile}.pxSize, ...
+                            'PhysicalPxSizeUnits', reader{iFile}.pxUnits, ...
+                            'ImageSize', [reader{iFile}.height, reader{iFile}.width], ...
                             'ProcessingSettings', opts);
                     end
                     
                     %Set the frame range to process
                     if isinf(opts.FrameRange)
-                        frameRange = 1:reader.sizeT;
+                        frameRange = 1:reader{iFile}.sizeT;
                     else
                         frameRange = opts.FrameRange;
                     end
                     
                     %Get timestamp information
-                    [ts, tsunit] = reader.getTimestamps(1,1);
+                    [ts, tsunit] = reader{iFile}.getTimestamps(1,1);
                     timestamps = [timestamps, ts(frameRange)];  %#ok<AGROW>
                     
                     %Print progress statement
@@ -758,7 +770,7 @@ classdef CyTracker < handle
                     %--- Start tracking ---%
                     for frame = frameRange
                         
-                        imgToSegment = CyTracker.getImageToSegment(reader, opts.ChannelToSegment, frame);
+                        imgToSegment = CyTracker.getImageToSegment(reader{iFile}, opts.ChannelToSegment, frame);
                         
                         if ~opts.UseMasks
                             %Segment the cells
@@ -795,7 +807,7 @@ classdef CyTracker < handle
                                 dotImg = dotLabels > 0;
                                 
                             else
-                                dotImg = reader.getPlane(1, opts.SpotChannel, frame);
+                                dotImg = reader{iFile}.getPlane(1, opts.SpotChannel, frame);
                                 
                                 %Run dot finding algorithm
                                 dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
@@ -821,7 +833,7 @@ classdef CyTracker < handle
                             
                             %Get the image to register against. Works best for
                             %Cy5 fluorescence channel.
-                            regImg = reader.getPlane(1, opts.ChannelToRegister, frame);
+                            regImg = reader{iFile}.getPlane(1, opts.ChannelToRegister, frame);
                             
                             if exist('prevImage', 'var')
                                 pxShift = CyTracker.xcorrreg(prevImage, regImg);
@@ -837,7 +849,7 @@ classdef CyTracker < handle
                         end
                         
                         %Run the measurement function
-                        cellData = CyTracker.measure(cellLabels, dotLabels, reader, frame, pxShift);
+                        cellData = CyTracker.measure(cellLabels, dotLabels, reader{iFile}, frame, pxShift);
                         
                         %Add detected objects to tracks
                         if numel(cellData) == 0
@@ -905,7 +917,7 @@ classdef CyTracker < handle
                         
                     end
                     
-                    frameOffset = frameOffset + reader.sizeT;
+                    frameOffset = frameOffset + reader{iFile}.sizeT;
                     
                 end
                 
