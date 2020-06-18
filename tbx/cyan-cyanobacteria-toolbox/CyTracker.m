@@ -632,6 +632,69 @@ classdef CyTracker < handle
             end
             
         end
+       
+        function set.RegisterImages(obj, regImgSetting)
+            
+            obj.RegisterImages = regImgSetting;
+            
+            %Set LinkedBy and DivisionParameter to RegisteredPxInd
+            if regImgSetting
+                
+                if ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
+                    warning('CyTracker:LinkingParameterChanged', ...
+                        'Linking parameter has been changed to ''RegisteredPxInd''.')
+                    obj.LinkedBy = 'RegisteredPxInd';
+                end
+                
+                if ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
+                    warning('CyTracker:DivisionParameterChanged', ...
+                        'Division parameter has been changed to ''RegisteredPxInd''.')
+                    obj.DivisionParameter = 'RegisteredPxInd';
+                end
+                
+            else
+                
+                if strcmp(obj.LinkedBy, 'RegisteredPxInd')
+                    warning('CyTracker:LinkingParameterChanged', ...
+                        'Linking parameter has been changed to ''PixelIdxList''.')
+                    obj.LinkedBy = 'PixelIdxList';
+                end
+                
+                if strcmp(obj.DivisionParameter, 'RegisteredPxInd')
+                    warning('CyTracker:DivisionParameterChanged', ...
+                        'Division parameter has been changed to ''PixelIdxList''.')
+                    obj.DivisionParameter = 'PixelIdxList';
+                end
+                
+            end
+            
+        end
+        
+        function set.DivisionParameter(obj, divParameter)
+            
+            obj.DivisionParameter = divParameter;
+            
+            if obj.RegisterImages
+                if ~strcmp(divParameter, 'RegisteredPxInd')
+                    warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                        'Division parameter should be ''RegisteredPxInd'' when image registration is carried out.')                    
+                end
+            end           
+            
+        end
+        
+        function set.LinkedBy(obj, linkedBy)
+            
+            obj.LinkedBy = linkedBy;
+            
+            if obj.RegisterImages
+                if ~strcmp(linkedBy, 'RegisteredPxInd')
+                    warning('CyTracker:LinkedByInvalidForRegistration', ...
+                        'Parameter for linking should be ''RegisteredPxInd'' when image registration is carried out.')
+                end
+            end
+            
+        end
         
     end
     
