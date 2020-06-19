@@ -185,15 +185,14 @@ classdef CyTracker < handle
             %Issue warnings if register images is true
             if obj.RegisterImages && ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
                 warning('CyTracker:DivisionParameterInvalidForRegistration', ...
-                    'Division parameter should be ''RegisteredPxInd'' when image registration is carried out.')
+                    'DivisionParameter should be ''RegisteredPxInd'' when image registration is carried out.')
             end
 
             if obj.RegisterImages && ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
                 warning('CyTracker:DivisionParameterInvalidForRegistration', ...
-                    'Linked by should be ''RegisteredPxInd'' when image registration is carried out.')
+                    'LinkedBy should be ''RegisteredPxInd'' when image registration is carried out.')
             end
-            
-            
+                        
             %Compile the options into a struct
             options = obj.getOptions;           
 
