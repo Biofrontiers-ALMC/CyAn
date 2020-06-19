@@ -182,6 +182,18 @@ classdef CyTracker < handle
                     'Expected number of inputs to be zero or a minimum of 2.')
             end
 
+            %Issue warnings if register images is true
+            if obj.RegisterImages && ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
+                warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                    'Division parameter should be ''RegisteredPxInd'' when image registration is carried out.')
+            end
+
+            if obj.RegisterImages && ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
+                warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                    'Linked by should be ''RegisteredPxInd'' when image registration is carried out.')
+            end
+            
+            
             %Compile the options into a struct
             options = obj.getOptions;           
 
@@ -638,34 +650,18 @@ classdef CyTracker < handle
             obj.RegisterImages = regImgSetting;
             
             %Set LinkedBy and DivisionParameter to RegisteredPxInd
-            if regImgSetting
+            if obj.RegisterImages
                 
                 if ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
-                    warning('CyTracker:LinkingParameterChanged', ...
-                        'Linking parameter has been changed to ''RegisteredPxInd''.')
-                    obj.LinkedBy = 'RegisteredPxInd';
+                    warning('CyTracker:LinkingParameterNotRegisteredPxInd', ...
+                        'Linking parameter should be ''RegisteredPxInd'' if images are to be registered.')
                 end
                 
                 if ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
-                    warning('CyTracker:DivisionParameterChanged', ...
-                        'Division parameter has been changed to ''RegisteredPxInd''.')
-                    obj.DivisionParameter = 'RegisteredPxInd';
-                end
-                
-            else
-                
-                if strcmp(obj.LinkedBy, 'RegisteredPxInd')
-                    warning('CyTracker:LinkingParameterChanged', ...
-                        'Linking parameter has been changed to ''PixelIdxList''.')
-                    obj.LinkedBy = 'PixelIdxList';
-                end
-                
-                if strcmp(obj.DivisionParameter, 'RegisteredPxInd')
-                    warning('CyTracker:DivisionParameterChanged', ...
-                        'Division parameter has been changed to ''PixelIdxList''.')
-                    obj.DivisionParameter = 'PixelIdxList';
-                end
-                
+                    warning('CyTracker:DivisionParameterNotRegisteredPxInd', ...
+                        'Division parameter should be ''RegisteredPxInd'' if images are to be registered.')
+                end               
+
             end
             
         end
