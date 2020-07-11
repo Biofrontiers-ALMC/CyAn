@@ -64,7 +64,7 @@ for iCell = outlierCells
     
     dd = -bwdist(~newMask);
     dd(~newMask) = -Inf;
-    dd = imhmin(dd, opts.maxCellminDepth-2);
+    dd = imhmin(dd, opts.maxCellminDepth);
     LL = watershed(dd);
     newMask(LL == 0) = 0;
     
@@ -94,8 +94,9 @@ mask(largeCellMask) = false;
 %Remove regions that are too small to be a cell
 mask = bwareaopen(mask, min(opts.cellAreaLim));
 
-%Draw as cylinders
-rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
-LL = CyTracker.drawCapsule(size(mask), rpCells);
+% %Draw as cylinders
+% rpCells = regionprops(mask,{'Centroid','MajorAxisLength','MinorAxisLength','Orientation','Area'});
+% LL = CyTracker.drawCapsule(size(mask), rpCells);
+LL = mask;
 
 end

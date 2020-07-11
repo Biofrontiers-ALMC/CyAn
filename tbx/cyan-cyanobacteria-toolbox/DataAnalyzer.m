@@ -172,6 +172,23 @@ classdef DataAnalyzer < TrackArray
             xlabel('Frames')            
         end
         
+        function plotGrowthRateFit(obj, trackID)
+            %PLOTGROWTHRATEFIT  Plot the growth rate fitting parameters
+            %
+            %  PLOTGROWTHRATEFIT(OBJ, TRACKID) plots the growth rate fit of
+            %  the selected track.
+            
+            xxLine = linspace( obj.Tracks(trackID).Frames(1) * obj.MeanDeltaT, ...
+                obj.Tracks(trackID).Frames(end) * obj.MeanDeltaT);
+            fitLine = exp(obj.Tracks(trackID).GRFitY) * exp(obj.Tracks(trackID).GrowthRate * xxLine);
+            
+            %xxLinePlot = xxLine + obj.Tracks(trackID).Frames(1) * obj.MeanDeltaT;
+            xxData = obj.Tracks(trackID).Frames * obj.MeanDeltaT;
+                        
+            plot(xxLine/3600, fitLine, xxData/3600, [obj.Tracks(trackID).Data.MajorAxisLength{:}] * obj.PxSize(1), 'ro');
+            
+        end
+        
     end
     
     methods (Static)

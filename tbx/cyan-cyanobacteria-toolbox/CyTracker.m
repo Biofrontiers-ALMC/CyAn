@@ -189,7 +189,7 @@ classdef CyTracker < handle
             end
 
             if obj.RegisterImages && ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
-                warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                warning('CyTracker:LinkedByInvalidForRegistration', ...
                     'LinkedBy should be ''RegisteredPxInd'' when image registration is carried out.')
             end
                         
@@ -1102,6 +1102,7 @@ classdef CyTracker < handle
             switch lower(segMode)
                 
                 case 'brightfield'
+                   
                     
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
@@ -1159,22 +1160,14 @@ classdef CyTracker < handle
                     binCenters = diff(binEdges) + binEdges(1:end-1);
                     
                     %Determine the background intensity level
-%                     [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
-                    
-%                     gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
-%                     
-%                     thLvl = gf.b1 + thFactor * gf.c1;
-%                     
                     [maxVal, maxInd] = max(nCnts);
-                    thInd = find(nCnts((maxInd + 1): end) < maxVal * thFactor, 1, 'first');
+                    thInd = find(nCnts((maxInd + 1): end) < (maxVal * thFactor), 1, 'first');
                     thLvl = binCenters(maxInd + thInd);
                     
                     mask = cellImage > thLvl;
                     
                     mask = imopen(mask,strel('disk',3));
                     mask = imclearborder(mask);
-                    
-                    %mask = activecontour(cellImage,mask);
                     
                     mask = bwareaopen(mask,100);
                     mask = imopen(mask,strel('disk',2));
@@ -1192,41 +1185,43 @@ classdef CyTracker < handle
                     
                     LL = bwareaopen(mask, 100);
                     
-%                     %Try to mark the image
-%                     markerImg = medfilt2(cellImage,[10 10]);
-%                     markerImg = imregionalmax(markerImg,8);
-%                     markerImg(~mask) = 0;
-%                     markerImg = imdilate(markerImg,strel('disk', 6));
-%                     markerImg = imerode(markerImg,strel('disk', 3));
-%                     
-%                     %Remove regions which are too dark
-%                     rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
-%                     markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
-%                     
-%                     idxToDelete = 1:numel(rptemp);
-%                     idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
-%                     
-%                     for ii = idxToDelete
-%                         markerImg(rptemp(ii).PixelIdxList) = 0;
-%                     end
-%                     
-%                     dd = imcomplement(medfilt2(cellImage,[4 4]));
-%                     dd = imimposemin(dd, ~mask | markerImg);
-%                     
-%                     cellLabels = watershed(dd);
-%                     cellLabels = imclearborder(cellLabels);
-%                     cellLabels = imopen(cellLabels, strel('disk',6));
-%                     
-%                     %Redraw the masks using cylinders
-%                     rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
-%                     
-%                     %Remove cells which are too small or too large
-%                     rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
-%                     
-%                     cellLabels = zeros(size(cellLabels));
-%                     for ii = 1:numel(rpCells)
-%                         cellLabels(rpCells(ii).PixelIdxList) = ii;
-%                     end
+                    %Try to mark the image
+                    markerImg = medfilt2(cellImage,[10 10]);
+                    markerImg = imregionalmax(markerImg,8);
+                    markerImg(~mask) = 0;
+                    markerImg = imdilate(markerImg,strel('disk', 6));
+                    markerImg = imerode(markerImg,strel('disk', 3));
+                    
+                    %Remove regions which are too dark
+                    rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
+                    markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
+                    
+                    idxToDelete = 1:numel(rptemp);
+                    idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
+                    
+                    for ii = idxToDelete
+                        markerImg(rptemp(ii).PixelIdxList) = 0;
+                    end
+                    
+                    dd = imcomplement(medfilt2(cellImage,[4 4]));
+                    dd = imimposemin(dd, ~mask | markerImg);
+                    
+                    cellLabels = watershed(dd);
+                    cellLabels = imclearborder(cellLabels);
+                    cellLabels = imopen(cellLabels, strel('disk',6));
+                    
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
+                    
+                    %Remove cells which are too small or too large
+                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                    
+                    cellLabels = zeros(size(cellLabels));
+                    for ii = 1:numel(rpCells)
+                        cellLabels(rpCells(ii).PixelIdxList) = ii;
+                    end
+                    
+                    LL = cellLabels;
                                         
                 case 'experimental'
                                        
@@ -2091,7 +2086,6 @@ classdef CyTracker < handle
             
         end
         
-
     end
     
     methods (Access = private)
