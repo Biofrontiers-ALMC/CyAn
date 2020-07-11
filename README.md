@@ -26,6 +26,3 @@ git clone git@biof-git.colorado.edu:cameron-lab/cyanobacteria-toolbox.git
 - Read the [Contributer Guide](https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home)
 - The directory of the Git repository is arranged according to the best practices described in [this MathWorks blog post](https://blogs.mathworks.com/developer/2017/01/13/matlab-toolbox-best-practices/).
 
-## License
-
-Unless otherwise noted, all code is copyright (c) University of Colorado Boulder. All rights reserved.
