@@ -1551,7 +1551,7 @@ classdef CyTracker < handle
                     if opts.SpotErodePx > 0
                         %Hack to remove spots at corner of image
                         cellMask = cellLabels > 0;
-                        cellMask = imdilate(cellMask, strel('disk', 1));
+                        cellMask = imdilate(cellMask, strel('disk', 2));
                         cellMask = imfill(cellMask, 'holes');
                         cellLabels = imerode(cellMask, strel('disk',opts.SpotErodePx));
                     end
