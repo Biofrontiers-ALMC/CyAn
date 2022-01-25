@@ -9,20 +9,20 @@ Welcome to CyAn, a MATLAB toolbox for analysis of cyanobacteria images and resul
 
 ## Installation and Usage
 
-Please see the [Getting Started guide](https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/-/wikis/user-guide/getting-started) or the [Wiki](https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/-/wikis/home).
+Please see the [Getting Started guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/getting-started) or the [Wiki](https://github.com/Biofrontiers-ALMC/CyAn/wiki).
 
 ## Contribute
 
 ### Bug reports and feature requests
 
-Please use the [Issue Tracker](https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/issues) to file a bug report or to request new features.
+Please use the [Issue Tracker](https://github.com/Biofrontiers-ALMC/CyAn/issues) to file a bug report or to request new features.
 
 ### Development 
 
 - The source code can be cloned from the repository
 ```git
-git clone git@biof-git.colorado.edu:cameron-lab/cyanobacteria-toolbox.git
+git clone git@github.com:Biofrontiers-ALMC/CyAn.git
 ```
-- Read the [Contributer Guide](https://biof-git.colorado.edu/cameron-lab/cyanobacteria-toolbox/wikis/home)
+- Read the [Maintainer's Guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/maintainers-guide)
 - The directory of the Git repository is arranged according to the best practices described in [this MathWorks blog post](https://blogs.mathworks.com/developer/2017/01/13/matlab-toolbox-best-practices/).
 
