@@ -182,6 +182,17 @@ classdef CyTracker < handle
                     'Expected number of inputs to be zero or a minimum of 2.')
             end
 
+            %Issue warnings if register images is true
+            if obj.RegisterImages && ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
+                warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                    'DivisionParameter should be ''RegisteredPxInd'' when image registration is carried out.')
+            end
+
+            if obj.RegisterImages && ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
+                warning('CyTracker:LinkedByInvalidForRegistration', ...
+                    'LinkedBy should be ''RegisteredPxInd'' when image registration is carried out.')
+            end
+                        
             %Compile the options into a struct
             options = obj.getOptions;           
 
@@ -632,6 +643,53 @@ classdef CyTracker < handle
             end
             
         end
+       
+        function set.RegisterImages(obj, regImgSetting)
+            
+            obj.RegisterImages = regImgSetting;
+            
+            %Set LinkedBy and DivisionParameter to RegisteredPxInd
+            if obj.RegisterImages
+                
+                if ~strcmp(obj.LinkedBy, 'RegisteredPxInd')
+                    warning('CyTracker:LinkingParameterNotRegisteredPxInd', ...
+                        'Linking parameter should be ''RegisteredPxInd'' if images are to be registered.')
+                end
+                
+                if ~strcmp(obj.DivisionParameter, 'RegisteredPxInd')
+                    warning('CyTracker:DivisionParameterNotRegisteredPxInd', ...
+                        'Division parameter should be ''RegisteredPxInd'' if images are to be registered.')
+                end               
+
+            end
+            
+        end
+        
+        function set.DivisionParameter(obj, divParameter)
+            
+            obj.DivisionParameter = divParameter;
+            
+            if obj.RegisterImages
+                if ~strcmp(divParameter, 'RegisteredPxInd')
+                    warning('CyTracker:DivisionParameterInvalidForRegistration', ...
+                        'Division parameter should be ''RegisteredPxInd'' when image registration is carried out.')                    
+                end
+            end           
+            
+        end
+        
+        function set.LinkedBy(obj, linkedBy)
+            
+            obj.LinkedBy = linkedBy;
+            
+            if obj.RegisterImages
+                if ~strcmp(linkedBy, 'RegisteredPxInd')
+                    warning('CyTracker:LinkedByInvalidForRegistration', ...
+                        'Parameter for linking should be ''RegisteredPxInd'' when image registration is carried out.')
+                end
+            end
+            
+        end
         
     end
     
@@ -687,6 +745,18 @@ classdef CyTracker < handle
                 opts.FrameRange = Inf;
             end
             
+            %Get a reader object for each file
+            reader = cell(1, numel(filename));
+            for iFile = 1:numel(filename)
+                %Get a reader object for the image
+                if strcmpi(opts.ImageReader, 'nd2sdk')
+                    reader{iFile} = ND2reader(filename{iFile});
+                else
+                    reader{iFile} = BioformatsImage(filename{iFile});
+                    reader{iFile}.swapZandT = opts.SwapZandT;
+                end
+            end
+            
             %Start processing
             for iSeries = opts.SeriesRange
                 
@@ -721,35 +791,35 @@ classdef CyTracker < handle
                     
                     [~, currfilename] = fileparts(filename{iFile});
                     
-                    %Get a reader object for the image
-                    if strcmpi(opts.ImageReader, 'nd2sdk')
-                        reader = ND2reader(filename{iFile});
-                    else
-                        reader = BioformatsImage(filename{iFile});
-                        reader.swapZandT = opts.SwapZandT;
-                    end
+%                     %Get a reader object for the image
+%                     if strcmpi(opts.ImageReader, 'nd2sdk')
+%                         reader = ND2reader(filename{iFile});
+%                     else
+%                         reader = BioformatsImage(filename{iFile});
+%                         reader.swapZandT = opts.SwapZandT;
+%                     end
                     
                     %Change series
-                    reader.series = iSeries;
+                    reader{iFile}.series = iSeries;
                     
                     if iFile == 1
                         %Update common file metadata
                         Linker = updateMetadata(Linker, 'Filename', strjoin(filename, '; '), ...
-                            'PhysicalPxSize', reader.pxSize, ...
-                            'PhysicalPxSizeUnits', reader.pxUnits, ...
-                            'ImageSize', [reader.height, reader.width], ...
+                            'PhysicalPxSize', reader{iFile}.pxSize, ...
+                            'PhysicalPxSizeUnits', reader{iFile}.pxUnits, ...
+                            'ImageSize', [reader{iFile}.height, reader{iFile}.width], ...
                             'ProcessingSettings', opts);
                     end
                     
                     %Set the frame range to process
                     if isinf(opts.FrameRange)
-                        frameRange = 1:reader.sizeT;
+                        frameRange = 1:reader{iFile}.sizeT;
                     else
                         frameRange = opts.FrameRange;
                     end
                     
                     %Get timestamp information
-                    [ts, tsunit] = reader.getTimestamps(1,1);
+                    [ts, tsunit] = reader{iFile}.getTimestamps(1,1);
                     timestamps = [timestamps, ts(frameRange)];  %#ok<AGROW>
                     
                     %Print progress statement
@@ -758,7 +828,7 @@ classdef CyTracker < handle
                     %--- Start tracking ---%
                     for frame = frameRange
                         
-                        imgToSegment = CyTracker.getImageToSegment(reader, opts.ChannelToSegment, frame);
+                        imgToSegment = CyTracker.getImageToSegment(reader{iFile}, opts.ChannelToSegment, frame);
                         
                         if ~opts.UseMasks
                             %Segment the cells
@@ -795,7 +865,7 @@ classdef CyTracker < handle
                                 dotImg = dotLabels > 0;
                                 
                             else
-                                dotImg = reader.getPlane(1, opts.SpotChannel, frame);
+                                dotImg = reader{iFile}.getPlane(1, opts.SpotChannel, frame);
                                 
                                 %Run dot finding algorithm
                                 dotLabels = CyTracker.segmentSpots(dotImg, cellLabels, opts);
@@ -821,7 +891,7 @@ classdef CyTracker < handle
                             
                             %Get the image to register against. Works best for
                             %Cy5 fluorescence channel.
-                            regImg = reader.getPlane(1, opts.ChannelToRegister, frame);
+                            regImg = reader{iFile}.getPlane(1, opts.ChannelToRegister, frame);
                             
                             if exist('prevImage', 'var')
                                 pxShift = CyTracker.xcorrreg(prevImage, regImg);
@@ -837,7 +907,7 @@ classdef CyTracker < handle
                         end
                         
                         %Run the measurement function
-                        cellData = CyTracker.measure(cellLabels, dotLabels, reader, frame, pxShift);
+                        cellData = CyTracker.measure(cellLabels, dotLabels, reader{iFile}, frame, pxShift);
                         
                         %Add detected objects to tracks
                         if numel(cellData) == 0
@@ -905,7 +975,7 @@ classdef CyTracker < handle
                         
                     end
                     
-                    frameOffset = frameOffset + reader.sizeT;
+                    frameOffset = frameOffset + reader{iFile}.sizeT;
                     
                 end
                 
@@ -1032,6 +1102,7 @@ classdef CyTracker < handle
             switch lower(segMode)
                 
                 case 'brightfield'
+                   
                     
                     %Pre-process the brightfield image: median filter and
                     %background subtraction
@@ -1089,22 +1160,14 @@ classdef CyTracker < handle
                     binCenters = diff(binEdges) + binEdges(1:end-1);
                     
                     %Determine the background intensity level
-%                     [~,locs] = findpeaks(nCnts,'Npeaks',1,'sortStr','descend');
-                    
-%                     gf = fit(binCenters', nCnts', 'Gauss1', 'StartPoint', [nCnts(locs), binCenters(locs), 10000]);
-%                     
-%                     thLvl = gf.b1 + thFactor * gf.c1;
-%                     
                     [maxVal, maxInd] = max(nCnts);
-                    thInd = find(nCnts((maxInd + 1): end) < maxVal * thFactor, 1, 'first');
+                    thInd = find(nCnts((maxInd + 1): end) < (maxVal * thFactor), 1, 'first');
                     thLvl = binCenters(maxInd + thInd);
                     
                     mask = cellImage > thLvl;
                     
                     mask = imopen(mask,strel('disk',3));
                     mask = imclearborder(mask);
-                    
-                    %mask = activecontour(cellImage,mask);
                     
                     mask = bwareaopen(mask,100);
                     mask = imopen(mask,strel('disk',2));
@@ -1122,41 +1185,43 @@ classdef CyTracker < handle
                     
                     LL = bwareaopen(mask, 100);
                     
-%                     %Try to mark the image
-%                     markerImg = medfilt2(cellImage,[10 10]);
-%                     markerImg = imregionalmax(markerImg,8);
-%                     markerImg(~mask) = 0;
-%                     markerImg = imdilate(markerImg,strel('disk', 6));
-%                     markerImg = imerode(markerImg,strel('disk', 3));
-%                     
-%                     %Remove regions which are too dark
-%                     rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
-%                     markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
-%                     
-%                     idxToDelete = 1:numel(rptemp);
-%                     idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
-%                     
-%                     for ii = idxToDelete
-%                         markerImg(rptemp(ii).PixelIdxList) = 0;
-%                     end
-%                     
-%                     dd = imcomplement(medfilt2(cellImage,[4 4]));
-%                     dd = imimposemin(dd, ~mask | markerImg);
-%                     
-%                     cellLabels = watershed(dd);
-%                     cellLabels = imclearborder(cellLabels);
-%                     cellLabels = imopen(cellLabels, strel('disk',6));
-%                     
-%                     %Redraw the masks using cylinders
-%                     rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
-%                     
-%                     %Remove cells which are too small or too large
-%                     rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
-%                     
-%                     cellLabels = zeros(size(cellLabels));
-%                     for ii = 1:numel(rpCells)
-%                         cellLabels(rpCells(ii).PixelIdxList) = ii;
-%                     end
+                    %Try to mark the image
+                    markerImg = medfilt2(cellImage,[10 10]);
+                    markerImg = imregionalmax(markerImg,8);
+                    markerImg(~mask) = 0;
+                    markerImg = imdilate(markerImg,strel('disk', 6));
+                    markerImg = imerode(markerImg,strel('disk', 3));
+                    
+                    %Remove regions which are too dark
+                    rptemp = regionprops(markerImg, cellImage,'MeanIntensity','PixelIdxList');
+                    markerTh = median([rptemp.MeanIntensity]) - 0.2 * median([rptemp.MeanIntensity]);
+                    
+                    idxToDelete = 1:numel(rptemp);
+                    idxToDelete([rptemp.MeanIntensity] > markerTh) = [];
+                    
+                    for ii = idxToDelete
+                        markerImg(rptemp(ii).PixelIdxList) = 0;
+                    end
+                    
+                    dd = imcomplement(medfilt2(cellImage,[4 4]));
+                    dd = imimposemin(dd, ~mask | markerImg);
+                    
+                    cellLabels = watershed(dd);
+                    cellLabels = imclearborder(cellLabels);
+                    cellLabels = imopen(cellLabels, strel('disk',6));
+                    
+                    %Redraw the masks using cylinders
+                    rpCells = regionprops(cellLabels,{'Area','PixelIdxList'});
+                    
+                    %Remove cells which are too small or too large
+                    rpCells(([rpCells.Area] < min(cellAreaLim)) | ([rpCells.Area] > max(cellAreaLim))) = [];
+                    
+                    cellLabels = zeros(size(cellLabels));
+                    for ii = 1:numel(rpCells)
+                        cellLabels(rpCells(ii).PixelIdxList) = ii;
+                    end
+                    
+                    LL = cellLabels;
                                         
                 case 'experimental'
                                        
@@ -1486,7 +1551,7 @@ classdef CyTracker < handle
                     if opts.SpotErodePx > 0
                         %Hack to remove spots at corner of image
                         cellMask = cellLabels > 0;
-                        cellMask = imdilate(cellMask, strel('disk', 1));
+                        cellMask = imdilate(cellMask, strel('disk', 2));
                         cellMask = imfill(cellMask, 'holes');
                         cellLabels = imerode(cellMask, strel('disk',opts.SpotErodePx));
                     end
@@ -2021,7 +2086,6 @@ classdef CyTracker < handle
             
         end
         
-
     end
     
     methods (Access = private)
@@ -2038,6 +2102,7 @@ classdef CyTracker < handle
     end
     
     methods (Access = private, Static)
+        
         function imgToSegment = getImageToSegment(reader, channels, frame)
             %GETIMAGETOSEGMENT  Get image to segment
             %
