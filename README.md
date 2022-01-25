@@ -23,6 +23,6 @@ Please use the [Issue Tracker](https://github.com/Biofrontiers-ALMC/CyAn/issues)
 ```git
 git clone git@github.com:Biofrontiers-ALMC/CyAn.git
 ```
-- Read the [Maintainer's Guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/maintainers-guide)
+- Read the [Developer's Guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/dev-guide)
 - The directory of the Git repository is arranged according to the best practices described in [this MathWorks blog post](https://blogs.mathworks.com/developer/2017/01/13/matlab-toolbox-best-practices/).
 
