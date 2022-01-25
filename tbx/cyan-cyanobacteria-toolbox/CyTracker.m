@@ -2102,6 +2102,7 @@ classdef CyTracker < handle
     end
     
     methods (Access = private, Static)
+        
         function imgToSegment = getImageToSegment(reader, channels, frame)
             %GETIMAGETOSEGMENT  Get image to segment
             %

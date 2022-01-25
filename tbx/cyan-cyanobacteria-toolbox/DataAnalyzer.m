@@ -243,14 +243,3 @@ classdef DataAnalyzer < TrackArray
     end
     
 end
-
-
-
-
-
-
-
-
-
-
-
