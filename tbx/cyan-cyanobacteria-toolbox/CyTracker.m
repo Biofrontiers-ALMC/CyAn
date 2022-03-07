@@ -68,7 +68,7 @@ classdef CyTracker < handle
         LinkingScoreRange(1,2) double = [1, 8];
         MaxTrackAge double = 2;
         
-        %Mitosis detection parameters
+        %Division detection parameters
         TrackDivision logical = true;
         MinAgeSinceDivision double = 2;
         DivisionParameter char = 'PixelIdxList';          %What property is used for mitosis detection?
@@ -838,10 +838,10 @@ classdef CyTracker < handle
                             
                             %Write masks to file
                             if opts.SaveMasks
-                                if iT == frameRange(1)
-                                    imwrite(cellLabels, [saveFN, 'cellMask.tif'], 'Compression', 'None');
+                                if frame == frameRange(1)
+                                    imwrite(cellLabels, [saveFN, '_cellMask.tif'], 'Compression', 'None');
                                 else
-                                    imwrite(cellLabels, [saveFN, 'cellMask.tif'], ...
+                                    imwrite(cellLabels, [saveFN, '_cellMask.tif'], ...
                                         'Compression', 'None', 'WriteMode', 'append');
                                 end
                             end
