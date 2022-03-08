@@ -9,7 +9,7 @@ Welcome to CyAn, a MATLAB toolbox for analysis of cyanobacteria images and resul
 
 ## Installation and Usage
 
-Please see the [Getting Started guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/getting-started) or the [Wiki](https://github.com/Biofrontiers-ALMC/CyAn/wiki).
+To use this toolbox, [download](https://github.com/Biofrontiers-ALMC/CyAn/releases) the latest release. **You do not need to download this repository.** For more information, please see the [Getting Started guide](https://github.com/Biofrontiers-ALMC/CyAn/wiki/getting-started).
 
 ## Contribute
 
@@ -17,9 +17,9 @@ Please see the [Getting Started guide](https://github.com/Biofrontiers-ALMC/CyAn
 
 Please use the [Issue Tracker](https://github.com/Biofrontiers-ALMC/CyAn/issues) to file a bug report or to request new features.
 
-### Development 
+### Source code
 
-- The source code can be cloned from the repository
+- The source code can be cloned from this repository
 ```git
 git clone git@github.com:Biofrontiers-ALMC/CyAn.git
 ```

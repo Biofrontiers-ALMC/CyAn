@@ -760,14 +760,6 @@ classdef CyTracker < handle
             %Start processing
             for iSeries = opts.SeriesRange
                 
-                %Generate output filename (no extension)
-                [~, fname] = fileparts(filename{1});
-                if numel(filename) == 1
-                    saveFN = fullfile(outputDir, sprintf('%s_series%d', fname, iSeries));
-                elseif numel(filename) > 1
-                    saveFN = fullfile(outputDir, sprintf('%s_series%d_merged', fname, iSeries));
-                end
-                
                 %Reset frame offset (for handling merging of multiple
                 %files)
                 frameOffset = 0;
@@ -790,6 +782,14 @@ classdef CyTracker < handle
                 for iFile = 1:numel(filename)
                     
                     [~, currfilename] = fileparts(filename{iFile});
+                    
+                    %Generate output filename (no extension)
+                    [~, fname] = fileparts(filename{iFile});
+                    if numel(filename) == 1
+                        saveFN = fullfile(outputDir, sprintf('%s_series%d', fname, iSeries));
+                    elseif numel(filename) > 1
+                        saveFN = fullfile(outputDir, sprintf('%s_series%d_merged', fname, iSeries));
+                    end
                     
 %                     %Get a reader object for the image
 %                     if strcmpi(opts.ImageReader, 'nd2sdk')
