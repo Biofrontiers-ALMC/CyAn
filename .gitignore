@@ -7,3 +7,4 @@
 #Allow everything in the build directory
 !build/*.*
 build/*.mltbx
+build/*.zip
