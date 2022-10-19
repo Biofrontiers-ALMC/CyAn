@@ -1,13 +1,13 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="501970841" file="D:\Projects\cyanobacteria-toolbox\code\build\CyAn.prj" location="D:\Projects\cyanobacteria-toolbox\code\build" name="CyAn" target="target.toolbox" target-name="Package Toolbox">
+  <configuration build-checksum="501970841" file="D:\Projects\Toolboxes\cyanobacteria-toolbox\code\build\CyAn.prj" location="D:\Projects\Toolboxes\cyanobacteria-toolbox\code\build" name="CyAn" target="target.toolbox" target-name="Package Toolbox">
     <param.appname>CyAn (Cyanobacteria Analysis Toolbox)</param.appname>
     <param.authnamewatermark>Jian Wei Tay</param.authnamewatermark>
     <param.email>jian.tay@colorado.edu</param.email>
     <param.company>University of Colorado Boulder</param.company>
     <param.summary>Cyanobacteria Image Analysis Toolbox</param.summary>
     <param.description>This toolbox contains scripts for identification (segmentation) and tracking of cyanobacteria in microscope images, as well as analysis of the resulting data.</param.description>
-    <param.screenshot>C:\Users\Jian Tay\Desktop\CyAn.png</param.screenshot>
-    <param.version>1.3.2</param.version>
+    <param.screenshot>${PROJECT_ROOT}\CyAn.png</param.screenshot>
+    <param.version>1.3.3</param.version>
     <param.output>${PROJECT_ROOT}\CyAn (Cyanobacteria Analysis Toolbox).mltbx</param.output>
     <param.products.name />
     <param.products.id />
@@ -77,37 +77,45 @@
       <param.additional.sw.linux.url />
     </unset>
     <fileset.rootdir>
-      <file>D:\Projects\cyanobacteria-toolbox\code\tbx</file>
+      <file>D:\Projects\Toolboxes\cyanobacteria-toolbox\code\tbx</file>
     </fileset.rootdir>
     <fileset.rootfiles>
-      <file>D:\Projects\cyanobacteria-toolbox\code\tbx\cyan-cyanobacteria-toolbox</file>
+      <file>D:\Projects\Toolboxes\cyanobacteria-toolbox\code\tbx\cyan-cyanobacteria-toolbox</file>
     </fileset.rootfiles>
     <fileset.depfun.included />
     <fileset.depfun.excluded>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetPlane.m</file>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetReader.m</file>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\private\is_octave.m</file>
-      <file>D:\Projects\Bioformats Image Toolbox\code\tbx\BioformatsImage\BioformatsImage.m</file>
+      <file>D:\Projects\Common\imp-toolbox\.git\index</file>
       <file>D:\Projects\Common\imp-toolbox\showoverlay.m</file>
-      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
-      <file>D:\Projects\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaMemory.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfCheckJavaPath.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetPlane.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\bfGetReader.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\bfmatlab\private\is_octave.m</file>
+      <file>D:\Projects\Toolboxes\Bioformats Image Toolbox\code\tbx\BioformatsImage\BioformatsImage.m</file>
+      <file>D:\Projects\Toolboxes\Linear Assignment Linker\code\tbx\lap-tracker\LAPLinker.m</file>
+      <file>D:\Projects\Toolboxes\Linear Assignment Linker\code\tbx\lap-tracker\TrackArray.m</file>
+      <file>D:\Projects\Toolboxes\nd2sdk-matlab\code\tbx\nd2reader\ND2reader.m</file>
     </fileset.depfun.excluded>
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="CyAn (Cyanobacteria Analysis Toolbox).mltbx" optional="false">D:\Projects\cyanobacteria-toolbox\code\build\CyAn (Cyanobacteria Analysis Toolbox).mltbx</file>
+      <file location="${PROJECT_ROOT}" name="CyAn (Cyanobacteria Analysis Toolbox).mltbx" optional="false">D:\Projects\Toolboxes\cyanobacteria-toolbox\code\build\CyAn (Cyanobacteria Analysis Toolbox).mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
       <root>C:\Program Files\MATLAB\R2021b</root>
       <toolboxes>
         <toolbox name="matlabcoder" />
+        <toolbox name="neuralnetwork" />
       </toolboxes>
       <toolbox>
         <matlabcoder>
           <enabled>true</enabled>
         </matlabcoder>
+      </toolbox>
+      <toolbox>
+        <neuralnetwork>
+          <enabled>true</enabled>
+        </neuralnetwork>
       </toolbox>
     </matlab>
     <platform>
