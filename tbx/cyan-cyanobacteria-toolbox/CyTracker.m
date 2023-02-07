@@ -1036,6 +1036,7 @@ classdef CyTracker < handle
                         cellData(iCell).NormSpotDist = [];
                         cellData(iCell).MeanSpotInt = zeros(1,numel(spotData));
                         cellData(iCell).SpotCentroid = cat(1, spotData.Centroid);
+                        cellData(iCell).SpotPixelIdxList = {spotData.PixelIdxList};
 
                         for iSpots = 1:numel(spotData)
 
