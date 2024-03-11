@@ -582,14 +582,6 @@ classdef CyTracker < handle
 
                     reader.series = iSeries;
 
-                    %For 'nicksversion' of segmentation, if using auto
-                    %threshold finding
-                    if strcmpi(obj.SegMode, 'CyTracker.nickSeg') && obj.ThresholdLevel == inf
-                        obj.ThresholdLevel = findBgStDevThLvl(obj, filename{iFile});
-                    elseif ~strcmpi(obj.SegMode, 'CyTracker.nickSeg') && obj.ThresholdLevel == inf
-                        error('Cannot have infinite threshold level in SegModes other than CyTracker.nickSeg. Change SegMode to CyTracker.nickSeg and use inf threshold level for auto thresholding.')
-                    end
-
                     for iT = frameRange
 
                         imgToSegment = CyTracker.getImageToSegment(reader, obj.ChannelToSegment, iT);
