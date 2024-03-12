@@ -1475,6 +1475,14 @@ classdef CyTracker < handle
                     LL = mask;
                     %                     keyboard
 
+                case 'cypose'
+
+
+                    %TODO: Add cell size estimation
+                    cp = cellpose(Model="cyposeModels/7002_CAH_Default");
+
+                    LL = segmentCells2D(cp, cellImage);
+
                 otherwise
 
                     %Call a script. The script must have the following
